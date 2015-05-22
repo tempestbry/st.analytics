@@ -5,7 +5,7 @@ import java.util.Date;
 /**
  * 
  * @author ansonliu
- *
+ *fff
  */
 public class TourEvent {
 

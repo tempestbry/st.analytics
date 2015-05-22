@@ -14,6 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
+import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.TourEvent;
 
 @RestController
@@ -34,20 +35,35 @@ public class ExampleController {
 
 	@RequestMapping("/sql")
 	public @ResponseBody
-	List<TourEvent> sql() {
+	List<PoiCheckins> sql() {
 
-		List<TourEvent> results = jdbcTemplate.query(
-				"select * from place_part_general limit 10",
-				new RowMapper<TourEvent>() {
+		
+		List<PoiCheckins> results = jdbcTemplate.query(
+				"SELECT A.place_id,checkins,px,py FROM scheduling AS A, OpenTimeArray AS B WHERE A.place_id = B.place_id",
+				new RowMapper<PoiCheckins>() {
 					@Override
-					public TourEvent mapRow(ResultSet rs, int rowNum)
+					public PoiCheckins mapRow(ResultSet rs, int rowNum)
 							throws SQLException {
-						Date current = new Date();
-						return new TourEvent(current, new Date(current
-								.getTime() + 2 * 60 * 60 * 1000), rs
-								.getString("Place_Id"));
+//						Date current = new Date();
+						return new PoiCheckins(rs.getString("A.place_id"),rs.getInt("checkins"),rs.getDouble("px"),rs.getDouble("py"));
 					}
 				});
-		return results;		
+		return results;
+//		List<TourEvent> results = jdbcTemplate.query(
+//				"select * from place_part_general limit 10",
+//				new RowMapper<TourEvent>() {
+//					@Override
+//					public TourEvent mapRow(ResultSet rs, int rowNum)
+//							throws SQLException {
+//						Date current = new Date();
+//						return new TourEvent(current, new Date(current
+//								.getTime() + 2 * 60 * 60 * 1000), rs
+//								.getString("Place_Id"));
+//					}
+//				});
+//		return results;		
+		
+		
+		
 	}
 }
