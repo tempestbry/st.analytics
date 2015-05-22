@@ -2,6 +2,11 @@ package tw.org.iii.model;
 
 import java.util.Date;
 
+/**
+ * 
+ * @author ansonliu
+ *
+ */
 public class TourEvent {
 
 	Date startTime;
