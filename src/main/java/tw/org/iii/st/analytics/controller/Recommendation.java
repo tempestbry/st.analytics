@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -23,8 +24,12 @@ import org.springframework.jdbc.core.RowMapper;
 
 
 
+
+
+
 import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.RecommendInfo;
+import tw.org.iii.model.RecommendInput;
 
 @RestController
 @RequestMapping("/Recommendation")
@@ -33,28 +38,63 @@ public class Recommendation {
 	JdbcTemplate jdbcTemplate;
 
 	
-	@RequestMapping("/ThisTime")
-	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
-	{
-		timeInfo ti = getWeekday();
-		String[] result = FindBestPOI(ti,px,py);
-		
-		return result;
-	}
+//	@RequestMapping("/ThisTime")
+//	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
+//	{
+//		timeInfo ti = getWeekday();
+//		String[] result = FindBestPOI(ti,px,py);
+//		
+//		return result;
+//	}
+	
+//	@RequestMapping("/Related")
+//	public String[] relatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
+//	{
+//		List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
+//				+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county ORDER BY total DESC LIMIT 0,5");
+//		
+//		
+//		int i=0;
+//		String result[] = new String[5];
+//		for (RecommendInfo ri : sqlresult) 
+//		{
+//			result[i++] = ri.getRecommendID();
+//		}
+//				
+//		return result;
+//      
+//	}
 	
 	@RequestMapping("/Related")
-	public String[] relatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
+	public String[] relatedRecommendation(@RequestBody RecommendInput json) throws ClassNotFoundException, SQLException, NumberFormatException, IOException, ParseException
 	{
-		List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
-				+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county ORDER BY total DESC LIMIT 0,5");
-		
-		
-		int i=0;
 		String result[] = new String[5];
-		for (RecommendInfo ri : sqlresult) 
+		
+		String pid = json.getPoiId();
+		if ("".equals(pid) || pid == null)
 		{
-			result[i++] = ri.getRecommendID();
+			timeInfo ti = getWeekday();
+			String spl[] = json.getGps().split(",");
+			result = FindBestPOI(ti,Double.parseDouble(spl[0]),Double.parseDouble(spl[1]));
+			return result;
 		}
+		else
+		{
+			List<String> c = json.getCountyId();
+			String countyList = "";
+			for (int i=0;i<c.size()-1;i++)
+				countyList += "place_county = '"+c.get(i)+"' or ";
+			countyList += "place_county = '"+c.get(c.size()-1)+"'";
+			List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
+					+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county and ("+countyList+") and type = '"+json.getReturnType()+"' ORDER BY total DESC LIMIT 0,5");
+			int i=0;
+			
+			for (RecommendInfo ri : sqlresult) 
+			{
+				result[i++] = ri.getRecommendID();
+			}
+		}
+		
 				
 		return result;
       
@@ -204,7 +244,7 @@ public class Recommendation {
 			
 			int limit=0;
 			//找出前30名的打卡點
-			sqlresult = Query("SELECT checkins FROM scheduling AS A, OpenTimeArray AS B "
+			sqlresult = Query("SELECT A.place_id,A.checkins,A.px,A.py FROM scheduling AS A, OpenTimeArray AS B "
 					+ "WHERE B.weekday = '"+ti.weekday+"' "
 					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id GROUP BY fb_id ORDER BY checkins DESC limit 0,30");
 			for (PoiCheckins p : sqlresult)
@@ -214,7 +254,7 @@ public class Recommendation {
 					limit = p.getCheckins();
 			}
 			//30個裡面隨機挑選
-			sqlresult = Query("SELECT A.place_id FROM scheduling AS A, OpenTimeArray AS B "
+			sqlresult = Query("SELECT A.place_id,A.checkins,A.px,A.py FROM scheduling AS A, OpenTimeArray AS B "
 					+ "WHERE B.weekday = '"+ti.weekday+"' "
 					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.checkins > "+limit+" GROUP BY fb_id ORDER BY RAND()");
 			for (PoiCheckins p : sqlresult)
