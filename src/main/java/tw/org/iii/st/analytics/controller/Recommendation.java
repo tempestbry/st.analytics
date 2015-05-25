@@ -32,14 +32,34 @@ public class Recommendation {
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 
+	
 	@RequestMapping("/ThisTime")
-	private @ResponseBody String[] HomeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
+	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
 	{
 		timeInfo ti = getWeekday();
 		String[] result = FindBestPOI(ti,px,py);
 		
 		return result;
 	}
+	
+	@RequestMapping("/Related")
+	public String[] relatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
+	{
+		List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
+				+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county ORDER BY total DESC LIMIT 0,5");
+		
+		
+		int i=0;
+		String result[] = new String[5];
+		for (RecommendInfo ri : sqlresult) 
+		{
+			result[i++] = ri.getRecommendID();
+		}
+				
+		return result;
+      
+	}
+	
 	private boolean askGoogle(double px,double py) throws IOException
 	{
 		String county[] = {"台東","花蓮","宜蘭"};
@@ -62,7 +82,9 @@ public class Recommendation {
 		return true;
 
 	}
-	public String Parser(String text,String front,String end,int type)
+	
+	
+	private String Parser(String text,String front,String end,int type)
 	{
 		int from=0;
 		int finish=0;
@@ -97,7 +119,8 @@ public class Recommendation {
 		}
 
 	}
-	public String request(String url,String type) throws IOException
+	
+	private  String request(String url,String type) throws IOException
 	{
 		StringBuilder results = new StringBuilder();
 		try
@@ -126,6 +149,8 @@ public class Recommendation {
 		return results.toString();
 		
 	}
+	
+	
 	private String[] FindBestPOI(timeInfo ti,double px,double py) throws SQLException, ClassNotFoundException, IOException
 	{
 		
@@ -309,7 +334,7 @@ public class Recommendation {
 		ti.hour = date.getHours();
 		return ti;
 	}
-	public double Distance(double wd1,double jd1,double wd2,double jd2) //緯度, 經度這樣放
+	private double Distance(double wd1,double jd1,double wd2,double jd2) //緯度, 經度這樣放
 	{
 		double x,y,out;
 		double PI=3.14159265;
@@ -321,23 +346,7 @@ public class Recommendation {
 		return out/1000;
 	}
 	
-	@RequestMapping("/Related")
-	private String[] RelatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
-	{
-		List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
-				+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county ORDER BY total DESC LIMIT 0,5");
-		
-		
-		int i=0;
-		String result[] = new String[5];
-		for (RecommendInfo ri : sqlresult) 
-		{
-			result[i++] = ri.getRecommendID();
-		}
-				
-		return result;
-      
-	}
+	
 	private List<RecommendInfo> Query1(String q) {
 
 		
