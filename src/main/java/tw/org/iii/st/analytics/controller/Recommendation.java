@@ -38,14 +38,14 @@ public class Recommendation {
 	JdbcTemplate jdbcTemplate;
 
 	
-//	@RequestMapping("/ThisTime")
-//	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
-//	{
-//		timeInfo ti = getWeekday();
-//		String[] result = FindBestPOI(ti,px,py);
-//		
-//		return result;
-//	}
+	@RequestMapping("/ThisTime")
+	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
+	{
+		timeInfo ti = getWeekday();
+		String[] result = FindBestPOI(ti,px,py);
+		
+		return result;
+	}
 	
 //	@RequestMapping("/Related")
 //	public String[] relatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
