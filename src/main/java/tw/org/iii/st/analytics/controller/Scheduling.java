@@ -42,14 +42,14 @@ public class Scheduling {
 		weekday = getWeekday(si.getStartTime()); 
 		
 		preference = "";
-		List<String> p = si.getPreference();
+		List<String> p = si.getPreferenceList();
 		for (int i=0;i<p.size()-1;i++)
 			preference += "A.preference = '"+p.get(i)+"' or ";
 		preference+="A.preference = '"+p.get(p.size()-1)+"'";
 		
 		//取得旅程總時間
 		int freetime = FreeTime(sdf.parse(si.getStartTime()),sdf.parse(si.getEndTime()));
-		if ("".equals(si.getDestination()) || si.getDestination() == null)
+		if ("".equals(si.getEndPoiId()) || si.getEndPoiId() == null)
 		{
 			PlanResult.addAll(findTop(freetime));
 			freetime = FreeTime(PlanResult.get(index-1).getEndTime(),sdf.parse(si.getEndTime()));
@@ -73,7 +73,19 @@ public class Scheduling {
 			System.out.println(lastTime);
 		}
 		
-		return PlanResult;
+		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
+		finalResult.addAll(PlanResult);
+		close();
+		return finalResult;
+	}
+	private void close()
+	{
+		PlanResult.clear();
+		repeat.clear();
+		lastTime=0;
+		index=0;
+		preference="";
+		weekday="";
 	}
 	private ArrayList<TourEvent> findTop(int freetime) throws ParseException, SQLException
 	{
@@ -91,7 +103,7 @@ public class Scheduling {
 		
 		//找出Top
 		rs = Query("SELECT A.place_id,A.preference,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and A.checkins > 30000 and B.weekday = '"+weekday+"' and "+date.getHours()+"_Oclock = 1 and ("+preference+") GROUP BY fb_id ORDER BY rand() limit 0,40");
-		System.out.println("SELECT * FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and B.weekday = '"+weekday+"' and "+date.getHours()+"_Oclock = 1 ORDER BY checkins DESC limit 0,30");
+		//System.out.println("SELECT * FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and B.weekday = '"+weekday+"' and "+date.getHours()+"_Oclock = 1 ORDER BY checkins DESC limit 0,30");
 	
 		String gps[] = si.getGps().split(",");
 		double dis=0;
@@ -117,7 +129,7 @@ public class Scheduling {
 					continue;
 			}
 			int time = (int)(dis/0.7);
-			if (time<60 && time < (freetime*60))
+			if (time<45 && time < (freetime*60))
 			{
 				te = new TourEvent();
 				te.setPoiId(i.getPlaceID());
@@ -152,49 +164,28 @@ public class Scheduling {
 			this.py = y;
 		}
 		
-		public schedulingInfo(){
-			super();
-		}
 
 		public String getPlaceID() {
 			return place_id;
-		}
-
-		public void setPlaceID(String id) {
-			this.place_id = id;
 		}
 
 		public String getPreference() {
 			return preference;
 		}
 
-		public void setPreference(String p) {
-			this.preference = p;
-		}
-		
 		public int getStayTime() {
 			return stayTime;
-		}
-
-		public void setStayTime(int time) {
-			this.stayTime = time;
 		}
 
 		public double getPx() {
 			return px;
 		}
 
-		public void setPx(double px) {
-			this.px = px;
-		}
 		
 		public double getPy() {
 			return py;
 		}
 
-		public void setPy(double py) {
-			this.py = py;
-		}
 	}
 	private List<schedulingInfo> Query(String q) 
 	{
@@ -265,20 +256,20 @@ public class Scheduling {
 		
 		while (true)
 		{
-			te = costTime(PlanResult.get(index-1).getEndTime(),start,si.getDestination(),45,10000);
+			te = costTime(PlanResult.get(index-1).getEndTime(),start,si.getEndPoiId(),45,10000);
 			if ("".equals(te.getPoiId()) || te.getPoiId() == null)
 			{
 				if (lastTime > 60)
 				{
-					te = costTime(PlanResult.get(index-1).getEndTime(),start,si.getDestination(),60,5000);
+					te = costTime(PlanResult.get(index-1).getEndTime(),start,si.getEndPoiId(),60,5000);
 					if ("".equals(te.getPoiId()) || te.getPoiId() == null)
 					{
 						if (!repeat.contains(te.getPoiId()))
 						{
-							if (!"".equals(si.getDestination()) && si.getDestination() != null)
+							if (!"".equals(si.getEndPoiId()) && si.getEndPoiId() != null)
 							{
-								te.setPoiId(si.getDestination());
-								te.setStartTime(addTime(PlanResult.get(index-1).getEndTime(),toDestination(PlanResult.get(index-1).getPoiId(),si.getDestination())==100000 ? 30 : toDestination(PlanResult.get(index-1).getPoiId(),si.getDestination())));
+								te.setPoiId(si.getEndPoiId());
+								te.setStartTime(addTime(PlanResult.get(index-1).getEndTime(),toDestination(PlanResult.get(index-1).getPoiId(),si.getEndPoiId())==100000 ? 30 : toDestination(PlanResult.get(index-1).getPoiId(),si.getEndPoiId())));
 								te.setEndTime(sdf.parse(si.getEndTime()));
 								PlanResult.add(index++,te);
 								break;
@@ -295,10 +286,10 @@ public class Scheduling {
 				}
 				if (!repeat.contains(te.getPoiId()))
 				{
-					if (!"".equals(si.getDestination()) && si.getDestination() != null)
+					if (!"".equals(si.getEndPoiId()) && si.getEndPoiId() != null)
 					{
-						te.setPoiId(si.getDestination());
-						te.setStartTime(addTime(PlanResult.get(index-1).getEndTime(),toDestination(PlanResult.get(index-1).getPoiId(),si.getDestination())==100000 ? 30 : toDestination(PlanResult.get(index-1).getPoiId(),si.getDestination())));
+						te.setPoiId(si.getEndPoiId());
+						te.setStartTime(addTime(PlanResult.get(index-1).getEndTime(),toDestination(PlanResult.get(index-1).getPoiId(),si.getEndPoiId())==100000 ? 30 : toDestination(PlanResult.get(index-1).getPoiId(),si.getEndPoiId())));
 						te.setEndTime(sdf.parse(si.getEndTime()));
 						PlanResult.add(index++,te);
 						break;
@@ -320,14 +311,14 @@ public class Scheduling {
 		List<SchedulingDis> rs;
 		int destinationTime;
 		TourEvent te = new TourEvent();
-		rs = QueryDis("SELECT B.arrival_id, B.checkins, B.preference, B.time, (B.time + B.stay_time) AS totaltime FROM "
-				+ "OpenTimeArray AS A, euclid_distance AS B WHERE B.Id = '"+now+"' AND ("+preference.replace("A.", "B.")+") AND "
-						+ "A.Place_Id = B.arrival_id AND B.time < "+range+" AND B.checkins > "+checkin+" AND A.weekday = '"+weekday+"' "
-								+ "AND A."+startTime.getHours()+"_Oclock = 1 ORDER BY RAND() DESC");
-		System.out.println("SELECT B.arrival_id, B.checkins, B.preference, B.time, (B.time + B.stay_time) AS totaltime FROM "
-				+ "OpenTimeArray AS A, euclid_distance AS B WHERE B.Id = '"+now+"' AND ("+preference.replace("A.", "B.")+") AND "
-				+ "A.Place_Id = B.arrival_id AND B.time < "+range+" AND B.checkins > "+checkin+" AND A.weekday = '"+weekday+"' "
-						+ "AND A."+startTime.getHours()+"_Oclock = 1 ORDER BY RAND() DESC");
+		rs = QueryDis("SELECT A.arrival_id, A.checkins, A.preference, A.time, (A.time + A.stay_time) AS totaltime FROM "
+				+ "OpenTimeArray AS B, euclid_distance AS A WHERE A.Id = '"+now+"' AND ("+preference+") AND "
+						+ "B.Place_Id = A.arrival_id AND A.time < "+range+" AND A.checkins > "+checkin+" AND B.weekday = '"+weekday+"' "
+								+ "AND B."+startTime.getHours()+"_Oclock = 1 ORDER BY RAND() DESC");
+//		System.out.println("SELECT A.arrival_id, A.checkins, A.preference, A.time, (A.time + A.stay_time) AS totaltime FROM "
+//				+ "OpenTimeArray AS B, euclid_distance AS A WHERE A.Id = '"+now+"' AND ("+preference+") AND "
+//				+ "B.Place_Id = A.arrival_id AND A.time < "+range+" AND A.checkins > "+checkin+" AND B.weekday = '"+weekday+"' "
+//						+ "AND B."+startTime.getHours()+"_Oclock = 1 ORDER BY RAND() DESC");
 		for (SchedulingDis sd : rs) //找出目前所在景點可考慮去的鄰近景點候選清單
 		{
 			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13) && !(startTime.getHours() >= 17 && startTime.getHours() <= 19))
@@ -442,7 +433,7 @@ public class Scheduling {
 	}
 	private int toDestination(String now,String destination) throws SQLException
 	{
-		List<SchedulingDis> rs = QueryDis("SELECT (time+stay_time) AS totalTime FROM euclid_distance AS A WHERE id = '"+now+"' and arrival_id = '"+destination+"'");
+		List<SchedulingDis> rs = QueryDis("SELECT A.arrival_id,A.preference,checkins,time,(time+stay_time) AS totalTime FROM euclid_distance AS A WHERE id = '"+now+"' and arrival_id = '"+destination+"'");
 		System.out.println("SELECT (time+stay_time) AS totalTime FROM euclid_distance AS A WHERE id = '"+now+"' and arrival_id = '"+destination+"'");
 		if (rs.size()>0)
 			return rs.get(0).getTotalTime();
@@ -496,7 +487,7 @@ public class Scheduling {
 		cal.setTime(date);
 		
 		//亂數選行政區中A關卡
-		List<schedulingInfo> rs = Query("SELECT A.place_id,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and"
+		List<schedulingInfo> rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and"
 				+ " A.mission = 'A' and A.Place_Id = B.place_id and B.weekday = '"+weekday +"' and B."+date.getHours()+"_Oclock = 1 ORDER BY rand()");
 		te = new TourEvent();
 		if ("".equals(rs.get(0).getPlaceID()) || rs.get(0).getPlaceID() == null)
@@ -506,7 +497,7 @@ public class Scheduling {
 			for (String s : region)
 			{
 				r = s; 
-				List<schedulingInfo> rs1 = Query("SELECT A.place_id,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and"
+				List<schedulingInfo> rs1 = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and"
 						+ " A.mission = 'A' and A.Place_Id = B.place_id and B.weekday = '"+weekday +"' and B."+date.getHours()+"_Oclock = 1 ORDER BY rand()");
 				if ("".equals(rs1.get(0).getPlaceID()) || rs1.get(0).getPlaceID() == null)
 				{
@@ -522,7 +513,7 @@ public class Scheduling {
 				r = region.get(0);
 
 				
-				List<schedulingInfo> rs1 = Query("SELECT A.place_id,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and"
+				List<schedulingInfo> rs1 = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and"
 						+ " A.mission = 'A' and A.Place_Id = B.place_id ORDER BY rand()");
 				if ("".equals(rs1.get(0).getPlaceID()) || rs1.get(0).getPlaceID() == null)
 				{
@@ -562,7 +553,7 @@ public class Scheduling {
 		repeat.add(te.getPoiId());
 		
 		//亂數選行政區中B關卡 (營業時間依照上一個景點離開時間+1小時判斷)
-		rs = Query("SELECT A.place_id,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and A.mission = 'B' and "
+		rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and A.mission = 'B' and "
 				+ "A.Place_Id = B.place_id and B.weekday = '"+weekday +"' and B."+(result.get(index-1).getEndTime().getHours()+1)+"_Oclock = 1 ORDER BY rand()");
 		te = new TourEvent();
 		te.setPoiId(rs.get(0).getPlaceID());
@@ -573,7 +564,7 @@ public class Scheduling {
 		repeat.add(te.getPoiId());
 		
 		//亂數選行政區中C關卡 (營業時間依照上一個景點離開時間+1小時判斷)
-		rs = Query("SELECT A.place_id,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and A.mission = 'C' and "
+		rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and A.mission = 'C' and "
 				+ "A.Place_Id = B.place_id and B.weekday = '"+weekday +"' and B."+(result.get(index-1).getEndTime().getHours()+1)+"_Oclock = 1 ORDER BY rand()");
 		te = new TourEvent();
 		te.setPoiId(rs.get(0).getPlaceID());
@@ -588,7 +579,7 @@ public class Scheduling {
 	private int BetweenTime(String id,String arrival) throws SQLException
 	{
 		List<Integer> rs = QTime("SELECT time FROM googledirection_hybrid WHERE id = '"+id+"' and arrival_id = '"+arrival+"'");
-		if (rs.get(0) == null)
+		if (rs.size()==0)
 		{
 			List<Integer> rs1 = QTime("SELECT time FROM euclid_distance WHERE id = '"+id+"' and arrival_id = '"+arrival+"'");
 			return rs1.get(0);

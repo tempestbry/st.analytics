@@ -4,83 +4,81 @@ import java.util.*;
 public class SchedulingInput 
 {
 	private List<String> cityList = new ArrayList<String>();
-	public void setCity(List<String> p)
-	{
-		this.cityList = p;
-	}
-	public List<String> getCity()
-	{
-		return cityList;
-	}
-	
 	private List<String> preferenceList = new ArrayList<String>();
-	public void setPreference(List<String> p)
-	{
-		this.preferenceList = p;
-	}
-	public List<String> getPreference()
-	{
-		return preferenceList;
-	}
-	
 	private String startTime;
-	public void setStartTime(String t)
-	{
-		this.startTime = t;
-	}
-	public String getStartTime()
-	{
-		return startTime;
-	}
 	
 	private String endTime;
-	public void setEndTime(String t)
-	{
-		this.endTime = t;
-	}
-	public String getEndTime()
-	{
-		return endTime;
-	}
 	
 	private String gps;
-	public void setGps(String g)
-	{
-		this.gps = g;
-	}
-	public String getGps()
-	{
-		return gps;
-	}
 	
 	private String startPoiId;
-	public void setStartPoiId(String t)
-	{
-		this.startPoiId = t;
-	}
-	public String getStartPoiId()
-	{
-		return startPoiId;
-	}
 	
 	private String endPoiId;
-	public void setDestination(String t)
-	{
-		this.endPoiId = t;
-	}
-	public String getDestination()
-	{
-		return endPoiId;
-	}
 	
 	private boolean shake;
-	public void setShake(boolean t)
-	{
-		this.shake = t;
+
+	public List<String> getCityList() {
+		return cityList;
 	}
-	public boolean getShake()
-	{
+
+	public void setCityList(List<String> cityList) {
+		this.cityList = cityList;
+	}
+
+	public List<String> getPreferenceList() {
+		return preferenceList;
+	}
+
+	public void setPreferenceList(List<String> preferenceList) {
+		this.preferenceList = preferenceList;
+	}
+
+	public String getStartTime() {
+		return startTime;
+	}
+
+	public void setStartTime(String startTime) {
+		this.startTime = startTime;
+	}
+
+	public String getEndTime() {
+		return endTime;
+	}
+
+	public void setEndTime(String endTime) {
+		this.endTime = endTime;
+	}
+
+	public String getGps() {
+		return gps;
+	}
+
+	public void setGps(String gps) {
+		this.gps = gps;
+	}
+
+	public String getStartPoiId() {
+		return startPoiId;
+	}
+
+	public void setStartPoiId(String startPoiId) {
+		this.startPoiId = startPoiId;
+	}
+
+	public String getEndPoiId() {
+		return endPoiId;
+	}
+
+	public void setEndPoiId(String endPoiId) {
+		this.endPoiId = endPoiId;
+	}
+
+	public boolean isShake() {
 		return shake;
+	}
+
+	public void setShake(boolean shake) {
+		this.shake = shake;
 	}
 	
 	
