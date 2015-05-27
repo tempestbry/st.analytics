@@ -41,12 +41,14 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json)
 			throws ParseException, ClassNotFoundException, SQLException {
 
-		// 行程規劃開始
+	
 		si = json;
 		weekday = getWeekday(si.getStartTime());
 
 		preference = "";
 		List<String> p = si.getPreferenceList();
+		
+		// 將preference寫入條件
 		if (p.size()==0)
 		{
 			for (int i = 1; i < 7; i++)
@@ -62,9 +64,8 @@ public class Scheduling {
 	
 
 		// 取得旅程總時間
-		
-		
 		int freetime = FreeTime(si.getStartTime(), si.getEndTime() );
+		
 		if ("".equals(si.getEndPoiId()) || si.getEndPoiId() == null) {
 			PlanResult.addAll(findTop(freetime));
 			freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),
@@ -678,7 +679,7 @@ public class Scheduling {
 			rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
 					+ r
 					+ "' and"
-					+ " A.mission = 'C' and A.Place_Id = B.place_id ORDER BY rand()");
+					+ " A.mission = 'B' and A.Place_Id = B.place_id ORDER BY rand()");
 		}
 		te = new TourEvent();
 		te.setPoiId(rs.get(0).getPlaceID());
@@ -711,8 +712,7 @@ public class Scheduling {
 		te.setPoiId(rs.get(0).getPlaceID());
 		te.setStartTime(addTime(
 				result.get(index - 1).getEndTime(),
-				BetweenTime(result.get(index - 1).getPoiId(), rs.get(0)
-						.getPlaceID())));
+				BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).getPlaceID())));
 		te.setEndTime(addTime(te.getStartTime(), 30));
 
 		result.add(index++, te);
