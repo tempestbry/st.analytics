@@ -5,11 +5,11 @@ public class SchedulingInput
 {
 	private List<String> cityList = new ArrayList<String>();
 	private List<String> preferenceList = new ArrayList<String>();
-	private String startTime;
+	private Date startTime;
 	
-	private String endTime;
+	private Date endTime;
 	
-	private String gps;
+	private GeoPoint gps;
 	
 	private String startPoiId;
 	
@@ -33,27 +33,31 @@ public class SchedulingInput
 		this.preferenceList = preferenceList;
 	}
 
-	public String getStartTime() {
+	
+
+	
+
+	public Date getStartTime() {
 		return startTime;
 	}
 
-	public void setStartTime(String startTime) {
+	public void setStartTime(Date startTime) {
 		this.startTime = startTime;
 	}
 
-	public String getEndTime() {
+	public Date getEndTime() {
 		return endTime;
 	}
 
-	public void setEndTime(String endTime) {
+	public void setEndTime(Date endTime) {
 		this.endTime = endTime;
 	}
 
-	public String getGps() {
+	public GeoPoint getGps() {
 		return gps;
 	}
 
-	public void setGps(String gps) {
+	public void setGps(GeoPoint gps) {
 		this.gps = gps;
 	}
 
