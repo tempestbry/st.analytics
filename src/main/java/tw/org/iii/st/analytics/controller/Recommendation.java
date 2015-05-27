@@ -32,6 +32,7 @@ public class Recommendation {
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 
+	//test
 	
 	@RequestMapping("/ThisTime")
 	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
