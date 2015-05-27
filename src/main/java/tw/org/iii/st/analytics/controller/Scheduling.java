@@ -369,13 +369,10 @@ public class Scheduling {
 					}
 				}
 				if (!repeat.contains(te.getPoiId())) {
-					if (!"".equals(si.getEndPoiId())
-							&& si.getEndPoiId() != null) {
+					if (!"".equals(si.getEndPoiId()) && si.getEndPoiId() != null) 
+					{
 						te.setPoiId(si.getEndPoiId());
-						te.setStartTime(addTime(
-								PlanResult.get(index - 1).getEndTime(),
-								toDestination(PlanResult.get(index - 1)
-										.getPoiId(), si.getEndPoiId()) == 100000 ? 30
+						te.setStartTime(addTime(PlanResult.get(index - 1).getEndTime(),toDestination(PlanResult.get(index - 1).getPoiId(), si.getEndPoiId()) == 100000 ? 30
 										: toDestination(
 												PlanResult.get(index - 1)
 														.getPoiId(), si
@@ -600,6 +597,7 @@ public class Scheduling {
 				+ "' and B."
 				+ date.getHours()
 				+ "_Oclock = 1 ORDER BY rand()");
+		
 		te = new TourEvent();
 		if ("".equals(rs.get(0).getPlaceID()) || rs.get(0).getPlaceID() == null) {
 			// 重新挑選行政區
@@ -630,10 +628,10 @@ public class Scheduling {
 						+ r
 						+ "' and"
 						+ " A.mission = 'A' and A.Place_Id = B.place_id ORDER BY rand()");
-				if ("".equals(rs1.get(0).getPlaceID())
-						|| rs1.get(0).getPlaceID() == null) {
+//				if ("".equals(rs1.get(0).getPlaceID())
+//						|| rs1.get(0).getPlaceID() == null) {
 					te.setPoiId(rs1.get(0).getPlaceID());
-				}
+//				}
 			}
 		} else {
 			te.setPoiId(rs.get(0).getPlaceID());
@@ -674,6 +672,14 @@ public class Scheduling {
 				+ "' and B."
 				+ (result.get(index - 1).getEndTime().getHours() + 1)
 				+ "_Oclock = 1 ORDER BY rand()");
+		//未符合條件(拿掉時間條件)
+		if (rs.size()==0)
+		{
+			rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
+					+ r
+					+ "' and"
+					+ " A.mission = 'C' and A.Place_Id = B.place_id ORDER BY rand()");
+		}
 		te = new TourEvent();
 		te.setPoiId(rs.get(0).getPlaceID());
 		te.setStartTime(addTime(
@@ -694,6 +700,13 @@ public class Scheduling {
 				+ "' and B."
 				+ (result.get(index - 1).getEndTime().getHours() + 1)
 				+ "_Oclock = 1 ORDER BY rand()");
+		if (rs.size()==0)
+		{
+			rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
+					+ r
+					+ "' and"
+					+ " A.mission = 'C' and A.Place_Id = B.place_id ORDER BY rand()");
+		}
 		te = new TourEvent();
 		te.setPoiId(rs.get(0).getPlaceID());
 		te.setStartTime(addTime(
@@ -708,6 +721,8 @@ public class Scheduling {
 
 	}
 
+	
+	
 	private int BetweenTime(String id, String arrival) throws SQLException {
 		List<Integer> rs = QTime("SELECT time FROM googledirection_hybrid WHERE id = '"
 				+ id + "' and arrival_id = '" + arrival + "'");
