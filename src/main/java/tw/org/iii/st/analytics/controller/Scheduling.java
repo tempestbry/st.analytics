@@ -27,7 +27,7 @@ public class Scheduling {
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 
-	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	private SchedulingInput si;
 	private int lastTime;
 	private ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
@@ -47,9 +47,19 @@ public class Scheduling {
 
 		preference = "";
 		List<String> p = si.getPreferenceList();
-		for (int i = 0; i < p.size() - 1; i++)
-			preference += "A.preference = '" + p.get(i) + "' or ";
-		preference += "A.preference = '" + p.get(p.size() - 1) + "'";
+		if (p.size()==0)
+		{
+			for (int i = 1; i < 7; i++)
+				preference += "A.preference = 'PF" + i + "' or ";
+			preference += "A.preference = 'PF7'";
+		}
+		else
+		{
+			for (int i = 0; i < p.size() - 1; i++)
+				preference += "A.preference = '" + p.get(i) + "' or ";
+			preference += "A.preference = '" + p.get(p.size() - 1) + "'";
+		}
+	
 
 		// 取得旅程總時間
 		
@@ -98,8 +108,6 @@ public class Scheduling {
 		List<schedulingInfo> rs;
 		ArrayList<TourEvent> result = new ArrayList<TourEvent>();
 		TourEvent te;
-		// 取得星期幾
-		String weekday = getWeekday(si.getStartTime());
 
 		Calendar cal;
 		Date date = si.getStartTime();
@@ -120,14 +128,14 @@ public class Scheduling {
 		double dis = 0;
 		for (schedulingInfo i : rs) {
 			if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-				dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(), si
-						.getGps().getLng());
+				dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(), si
+						.getGps().getLat());
 			} else {
 				List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
 						+ si.getStartPoiId() + "'");
 				if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0)
-					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),
-							si.getGps().getLng());
+					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(),
+							si.getGps().getLat());
 				else
 					dis = Distance(i.getPy(), i.getPx(), gp.get(0).getY(), gp
 							.get(0).getX());
@@ -154,9 +162,71 @@ public class Scheduling {
 				break;
 			}
 		}
+		
+		
+		//當上面無結果時...
+		if (result.size()==0)
+		{
+			HashMap<String,Integer> tmp = new HashMap<String,Integer>();
+			HashMap<String,TourEvent> _tmp = new HashMap<String,TourEvent>();
+			for (schedulingInfo i : rs) {
+				if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
+					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(), si
+							.getGps().getLat());
+				} else {
+					List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
+							+ si.getStartPoiId() + "'");
+					if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0)
+						dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(),
+								si.getGps().getLat());
+					else
+						dis = Distance(i.getPy(), i.getPx(), gp.get(0).getY(), gp
+								.get(0).getX());
+				}
+
+				Date startTime = si.getStartTime();
+				if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
+						&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
+					if (i.getPreference().equals("PF1")
+							|| "".equals(i.getPreference())
+							|| i.getPreference() == null)
+						continue;
+				}
+				int time = (int) (dis / 0.7);
+				
+				te = new TourEvent();
+				te.setPoiId(i.getPlaceID());
+
+				te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())),
+						time));
+				te.setEndTime(addTime(te.getStartTime(), i.getStayTime()));
+				_tmp.put(i.getPlaceID(), te);
+				tmp.put(i.getPlaceID(), time);
+			}
+			
+			List<Map.Entry<String, Integer>> rank = sort(tmp);
+			result.add(_tmp.get(rank.get(0).getKey()));
+			index++;
+		}
 		return result;
 	}
+	private static List<Map.Entry<String, Integer>> sort(HashMap<String,Integer> a)
+	{
+		List<Map.Entry<String, Integer>> list_Data = new ArrayList<Map.Entry<String, Integer>>(a.entrySet());
 
+		Collections.sort(list_Data, new Comparator<Map.Entry<String, Integer>>()
+		{
+            public int compare(Map.Entry<String, Integer> entry1,
+                               Map.Entry<String, Integer> entry2){
+                return (entry2.getValue() - entry1.getValue());
+            }
+        });
+		
+		return list_Data;
+	}
+	
+	
+	
 	private class schedulingInfo {
 		double px;
 
@@ -582,7 +652,7 @@ public class Scheduling {
 					+ si.getStartPoiId() + "'");
 			if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0)
 				dis = Distance(rs.get(0).getPy(), rs.get(0).getPx(), si
-						.getGps().getLat(), si.getGps().getLng());
+						.getGps().getLng(), si.getGps().getLat());
 			else
 				dis = Distance(rs.get(0).getPy(), rs.get(0).getPx(), gp.get(0)
 						.getY(), gp.get(0).getX());
@@ -693,30 +763,7 @@ public class Scheduling {
 		case Calendar.TUESDAY:
 			return "Op_Tuesday";
 		case Calendar.WEDNESDAY:
-			return "Op_Wedesday";
-		case Calendar.THURSDAY:
-			return "Op_Thursday";
-		case Calendar.FRIDAY:
-			return "Op_Friday";
-		case Calendar.SATURDAY:
-			return "Op_Saturday";
-		default:
-			return "";
-		}
-	}
-	private String getWeekday(String date) throws ParseException {
-		Calendar cal = Calendar.getInstance();
-		cal.setTime(sdf.parse(date));
-		int dayOfWeek = cal.get(Calendar.DAY_OF_WEEK);
-		switch (dayOfWeek) {
-		case Calendar.SUNDAY:
-			return "Op_Sunday";
-		case Calendar.MONDAY:
-			return "Op_Monday";
-		case Calendar.TUESDAY:
-			return "Op_Tuesday";
-		case Calendar.WEDNESDAY:
-			return "Op_Wedesday";
+			return "Op_Wednesday";
 		case Calendar.THURSDAY:
 			return "Op_Thursday";
 		case Calendar.FRIDAY:
