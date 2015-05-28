@@ -6,11 +6,9 @@ public class RecommendInput {
 	String poiId;
 	List<String> countyId;
 	String returnType;
+	String gps;
 	
-	
-	GeoPoint gps;
-	
-	public RecommendInput(String id,List<String> county,String Type, GeoPoint gps) {
+	public RecommendInput(String id,List<String> county,String Type,String gps) {
 		super();
 		this.poiId = id;
 		this.countyId = county;
@@ -41,12 +39,11 @@ public class RecommendInput {
 	public void setReturnType(String type) {
 		this.returnType = type;
 	}
-	public GeoPoint getGps() {
+	
+	public String getGps() {
 		return gps;
 	}
-	public void setGps(GeoPoint gps) {
+	public void setGps(String gps) {
 		this.gps = gps;
 	}
-	
-	
 }
