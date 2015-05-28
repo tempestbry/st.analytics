@@ -2,6 +2,8 @@ package tw.org.iii.model;
 
 import java.util.Date;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 /**
  * 
  * @author ansonliu
@@ -9,8 +11,10 @@ import java.util.Date;
  */
 public class TourEvent {
 
+	@JsonSerialize(using=tw.org.iii.st.analytics.spring.IsoDateSerializer.class)
 	Date startTime;
 	
+	@JsonSerialize(using=tw.org.iii.st.analytics.spring.IsoDateSerializer.class)
 	Date endTime;
 	
 	String poiId;
