@@ -75,9 +75,8 @@ public class Recommendation {
 		if ("".equals(pid) || pid == null)
 		{
 			timeInfo ti = getWeekday();
-			//String spl[] = json.getGps().split(",");
-			
-			result = FindBestPOI(ti, json.getGps().getLng(), json.getGps().getLat());
+			String spl[] = json.getGps().split(",");
+			result = FindBestPOI(ti,Double.parseDouble(spl[0]),Double.parseDouble(spl[1]));
 			return result;
 		}
 		else
@@ -258,7 +257,7 @@ public class Recommendation {
 			//30個裡面隨機挑選
 			sqlresult = Query("SELECT A.place_id,A.checkins,A.px,A.py FROM scheduling AS A, OpenTimeArray AS B "
 					+ "WHERE B.weekday = '"+ti.weekday+"' "
-					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.checkins > "+limit+" GROUP BY fb_id ORDER BY RAND()");
+					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.checkins > 5000 GROUP BY fb_id ORDER BY RAND()");
 			for (PoiCheckins p : sqlresult)
 			{
 				if (i==5)

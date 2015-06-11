@@ -41,7 +41,9 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json)
 			throws ParseException, ClassNotFoundException, SQLException {
 
-	
+		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
+//	for (int j=0;j<1000;j++)
+//	{
 		si = json;
 		weekday = getWeekday(si.getStartTime());
 
@@ -89,9 +91,14 @@ public class Scheduling {
 			System.out.println(lastTime);
 		}
 
-		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
+		finalResult = new ArrayList<TourEvent>();
 		finalResult.addAll(PlanResult);
 		close();
+//	}
+		
+		
+		
+		
 		return finalResult;
 	}
 
@@ -286,13 +293,19 @@ public class Scheduling {
 		repeat.add(te.getPoiId());
 		
 		// 亂數選行政區中B關卡 (營業時間依照上一個景點離開時間+1小時判斷)
+		int clock;
+		if ((result.get(index - 1).getEndTime().getHours() + 1)==24)
+			clock = 0;
+		else
+			clock = (result.get(index - 1).getEndTime().getHours() + 1);
+		
 		rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
 				+ r
 				+ "' and A.mission = 'B' and "
 				+ "A.Place_Id = B.place_id and B.weekday = '"
 				+ weekday
 				+ "' and B."
-				+ (result.get(index - 1).getEndTime().getHours() + 1)
+				+ (clock)
 				+ "_Oclock = 1 ORDER BY rand()");
 		//未符合條件(拿掉時間條件)
 		if (rs.size()==0)
@@ -313,6 +326,10 @@ public class Scheduling {
 		result.add(index++, te);
 		repeat.add(te.getPoiId());
 		
+		if ((result.get(index - 1).getEndTime().getHours() + 1)==24)
+			clock = 0;
+		else
+			clock = (result.get(index - 1).getEndTime().getHours() + 1);
 		// 亂數選行政區中C關卡 (營業時間依照上一個景點離開時間+1小時判斷)
 		rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
 				+ r
@@ -320,7 +337,7 @@ public class Scheduling {
 				+ "A.Place_Id = B.place_id and B.weekday = '"
 				+ weekday
 				+ "' and B."
-				+ (result.get(index - 1).getEndTime().getHours() + 1)
+				+ (clock)
 				+ "_Oclock = 1 ORDER BY rand()");
 		if (rs.size()==0)
 		{
