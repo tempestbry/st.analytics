@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import tw.org.iii.model.GeoPoint;
 import tw.org.iii.model.SchedulingInput;
 import tw.org.iii.model.TourEvent;
 
@@ -234,7 +235,9 @@ public class Scheduling {
 				+ "_Oclock = 1 ORDER BY rand()");
 		
 		te = new TourEvent();
-		if ("".equals(rs.get(0).getPlaceID()) || rs.get(0).getPlaceID() == null) {
+		GeoPoint gpt = new GeoPoint();
+		//if ("".equals(rs.get(0).getPlaceID()) || rs.get(0).getPlaceID() == null) {
+		if (rs.size()==0) {
 			// 重新挑選行政區
 			region = QRegion("SELECT DISTINCT region FROM scheduling WHERE mission IS NOT NULL");
 			for (String s : region) {
@@ -247,9 +250,10 @@ public class Scheduling {
 						+ "' and B."
 						+ date.getHours()
 						+ "_Oclock = 1 ORDER BY rand()");
-				if ("".equals(rs1.get(0).getPlaceID())
-						|| rs1.get(0).getPlaceID() == null) {
+				if (rs1.size()>0) {
 					te.setPoiId(rs1.get(0).getPlaceID());
+					gpt.setLat(rs1.get(0).py);
+					gpt.setLng(rs1.get(0).px);
 					break;
 				}
 			}
@@ -264,15 +268,19 @@ public class Scheduling {
 						+ "' and"
 						+ " A.mission = 'A' and A.Place_Id = B.place_id ORDER BY rand()");
 				te.setPoiId(rs1.get(0).getPlaceID());
+				gpt.setLat(rs1.get(0).py);
+				gpt.setLng(rs1.get(0).px);
 			}
 		} else {
 			te.setPoiId(rs.get(0).getPlaceID());
+			gpt.setLat(rs.get(0).py);
+			gpt.setLng(rs.get(0).px);
 		}
 		
 		// 取得user所在地與第一個景點的行車時間
 		double dis;
 		if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-			dis = Distance(rs.get(0).getPy(), rs.get(0).getPx(), si.getGps()
+			dis = Distance(gpt.getLat(), gpt.getLng(), si.getGps()
 					.getLat(), si.getGps().getLng());
 		} else {
 			List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
