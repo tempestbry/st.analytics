@@ -94,6 +94,16 @@ public class Recommendation {
 			{
 				result[i++] = ri.getRecommendID();
 			}
+			
+			//沒有結果時, 則挑top進行推薦
+			if ("".equals(result[0]))
+			{
+				sqlresult = Query1("SELECT place_id,checkins FROM scheduling GROUP BY fb_id ORDER BY checkins DESC LIMIT 0,5");
+				for (RecommendInfo ri : sqlresult) 
+				{
+					result[i++] = ri.getRecommendID();
+				}
+			}
 		}
 		
 				
