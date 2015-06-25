@@ -96,21 +96,77 @@ public class Recommendation {
 			}
 			
 			//沒有結果時, 則挑top進行推薦
-			if ("".equals(result[0]))
+			if (result[4]==null)
 			{
-				sqlresult = Query1("SELECT place_id,checkins FROM scheduling GROUP BY fb_id ORDER BY checkins DESC LIMIT 0,5");
-				for (RecommendInfo ri : sqlresult) 
+				HashMap<String,defaultResult> tmp = new HashMap<String,defaultResult>();
+				List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and id = '"+pid+"'");
+				List<place_info> sql1 = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_name");
+				for (place_info s : sql) 
 				{
-					result[i++] = ri.getRecommendID();
+					double latitude = 0,latitude_tmp;
+					double longitude = 0,longitude_tmp;
+					String[] location = s.gps.split("\\(|\\)| "),location_tmp;
+
+					longitude = Double.parseDouble(location[2]);
+					latitude = Double.parseDouble(location[1]);
+
+					for (place_info s1 : sql1) 
+					{
+						defaultResult d = new defaultResult();
+						location_tmp = s1.gps.split("\\(|\\)| ");
+						longitude_tmp = Double.parseDouble(location_tmp[2]);
+						latitude_tmp = Double.parseDouble(location_tmp[1]);
+						d.distance = Distance(longitude,latitude,longitude_tmp,latitude_tmp);
+						d.checkins = s1.checkins;
+						tmp.put(s1.id, d);
+					}
+				}
+				List<Map.Entry<String, Integer>> sortresult = locationsort(tmp);
+				
+				for (Map.Entry<String, Integer> entry:sortresult) 
+			    {
+					result[i++] =entry.getKey();
+					if (i==5)
+						break;
+			    }
+//					{
+//						result[i++] = ri.getRecommendID();
+//					}
+				
+				//sqlresult = Query1("SELECT place_id,checkins FROM scheduling GROUP BY fb_id ORDER BY checkins DESC LIMIT 0,5");
+//				for (RecommendInfo ri : sqlresult) 
+//				{
+//					result[i++] = ri.getRecommendID();
+//				}
+				
+				
+				
+				
+			}
+			
+			if (i<5) //最後確認
+			{
+				
+				List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" ORDER BY checkins");
+				for (place_info s : sql) 
+			    {
+					result[i++] = s.id;
+					if (i==5)
+						break;
 				}
 			}
+			
 		}
 		
 				
 		return result;
       
 	}
-	
+	private class defaultResult
+	{
+		double distance;
+		int checkins;
+	}
 	private boolean askGoogle(double px,double py) throws IOException
 	{
 		String county[] = {"台東","花蓮","宜蘭"};
@@ -332,6 +388,33 @@ public class Recommendation {
 		
 	}
 	
+	private static List<Map.Entry<String, Integer>> locationsort(HashMap<String,defaultResult> a)
+	{
+		HashMap<String,Integer> tmp = new HashMap<String,Integer>();
+		for (String s : a.keySet())
+			tmp.put(s, (int)(a.get(s).distance * 10000));
+		List<Map.Entry<String, Integer>> list_Data = new ArrayList<Map.Entry<String, Integer>>(tmp.entrySet());
+
+		Collections.sort(list_Data, new Comparator<Map.Entry<String, Integer>>()
+		{
+            public int compare(Map.Entry<String, Integer> entry1,
+                               Map.Entry<String, Integer> entry2){
+                return (entry1.getValue() - entry2.getValue());
+            }
+        });
+		
+		int i=0;
+		for (Map.Entry<String, Integer> entry:list_Data) 
+	    {
+			System.out.println(entry.getKey() + "->" + entry.getValue());
+			i++;
+	    }
+		
+		System.out.println(i);
+		
+		return list_Data;
+	}
+	
 	private static List<Map.Entry<String, Integer>> sort(HashMap<String,Integer> a)
 	{
 		List<Map.Entry<String, Integer>> list_Data = new ArrayList<Map.Entry<String, Integer>>(a.entrySet());
@@ -398,6 +481,33 @@ public class Recommendation {
 	}
 	
 	
+	private class place_info
+	{
+		String id;
+		String gps;
+		int checkins;
+		private place_info(String id,String location,int checkin)
+		{
+			this.id = id;
+			this.gps = location;
+			this.checkins = checkin;
+		}
+	}
+	private List<place_info> Query2(String q) {
+
+		
+		List<place_info> results = jdbcTemplate.query(
+				q,
+				new RowMapper<place_info>() {
+					@Override
+					public place_info mapRow(ResultSet rs, int rowNum)
+							throws SQLException {
+						return new place_info(rs.getString("id"),rs.getString("location2"),rs.getInt("checkins"));
+					}
+				});
+		return results;
+		
+	}
 	private List<RecommendInfo> Query1(String q) {
 
 		
