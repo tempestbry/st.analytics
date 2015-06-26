@@ -128,19 +128,7 @@ public class Recommendation {
 					result[i++] =entry.getKey();
 					if (i==5)
 						break;
-			    }
-//					{
-//						result[i++] = ri.getRecommendID();
-//					}
-				
-				//sqlresult = Query1("SELECT place_id,checkins FROM scheduling GROUP BY fb_id ORDER BY checkins DESC LIMIT 0,5");
-//				for (RecommendInfo ri : sqlresult) 
-//				{
-//					result[i++] = ri.getRecommendID();
-//				}
-				
-				
-				
+			    }		
 				
 			}
 			
