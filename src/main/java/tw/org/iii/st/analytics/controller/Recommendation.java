@@ -75,8 +75,8 @@ public class Recommendation {
 		if ("".equals(pid) || pid == null)
 		{
 			timeInfo ti = getWeekday();
-			String spl[] = json.getGps().split(",");
-			result = FindBestPOI(ti,Double.parseDouble(spl[0]),Double.parseDouble(spl[1]));
+			//String spl[] = json.getGps().split(",");
+			result = FindBestPOI(ti, json.getGps().getLng(), json.getGps().getLat());
 			return result;
 		}
 		else
