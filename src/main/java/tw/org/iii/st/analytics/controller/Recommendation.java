@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+
 
 
 
@@ -35,6 +37,7 @@ import tw.org.iii.model.RecommendInput;
 @RequestMapping("/Recommendation")
 public class Recommendation {
 	@Autowired
+	@Qualifier("hualienJdbcTempplate")
 	JdbcTemplate jdbcTemplate;
 
 	//test

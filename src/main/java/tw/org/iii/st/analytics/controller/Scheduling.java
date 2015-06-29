@@ -6,7 +6,10 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import javax.annotation.sql.DataSourceDefinition;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,7 +29,12 @@ import tw.org.iii.model.TourEvent;
 @RequestMapping("/Scheduling")
 public class Scheduling {
 	@Autowired
-	JdbcTemplate jdbcTemplate;
+	@Qualifier("hualienJdbcTempplate")
+	private JdbcTemplate jdbcTemplate;
+	
+	@Autowired
+	@Qualifier("stJdbcTemplate")
+	private JdbcTemplate stJdbcTemplate;
 
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	private SchedulingInput si;
@@ -69,7 +77,7 @@ public class Scheduling {
 		// 取得旅程總時間
 		int freetime = FreeTime(si.getStartTime(), si.getEndTime() );
 		
-		if ("".equals(si.getEndPoiId()) || si.getEndPoiId() == null) {
+		if (!si.getTourType().contains("play-")) {
 			PlanResult.addAll(findTop(freetime));
 			freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),
 					si.getEndTime() );
@@ -81,7 +89,7 @@ public class Scheduling {
 			}
 			System.out.println(lastTime);
 		} else {
-			PlanResult.addAll(getMission(freetime));
+			PlanResult.addAll(getMission1(freetime));
 			freetime = FreeTime(PlanResult.get(2).getEndTime(),
 					si.getEndTime());
 			getOtherPOI(freetime);
@@ -209,6 +217,65 @@ public class Scheduling {
 		return result;
 	}
 
+	
+	private ArrayList<TourEvent> getMission1(int freetime) throws ParseException, SQLException
+	{
+		String type = si.getTourType().split("play-")[1];
+		
+		
+		GeoPoint gpt = new GeoPoint();
+		ArrayList<TourEvent> result = new ArrayList<TourEvent>();
+		TourEvent te = null;
+		
+		//起始時間
+		Calendar cal;
+		Date date = si.getStartTime();
+		cal = Calendar.getInstance();
+		cal.setTime(date);
+		
+		//取得任務代碼
+		List<Map<String, Object>> list = stJdbcTemplate.queryForList("SELECT DISTINCT sceneId FROM Scene AS A,ScenePoi AS B WHERE A.Id = B.sceneId and A.playId = "+type+" ORDER BY B.sceneId");
+		
+		String[] location;
+		
+		boolean flag=true;
+		for(Map map : list)
+		{
+			System.out.println(map.get("sceneId"));
+			List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT A.poiId,ASTEXT(B.location) AS B FROM ScenePoi AS A,PoiFinalView AS B WHERE sceneId = "+map.get("sceneId")+" and A.poiId = B.id ORDER BY rand() LIMIT 0,1");
+			te = new TourEvent();
+			te.setPoiId(rs.get(0).get("poiId").toString());
+			
+			//取得經緯度
+			location = rs.get(0).get("B").toString().split("\\(|\\)| ");
+			double lat = 0;
+			double lng = 0;
+			lat = Double.parseDouble(location[1]);
+			lng = Double.parseDouble(location[2]);
+			gpt.setLat(lat);
+			gpt.setLng(lng);
+			
+			if (flag)
+			{
+				double dis = Distance(gpt.getLat(), gpt.getLng(), si.getGps().getLat(), si.getGps().getLng());
+				int time = (int) (dis / 0.7);
+				te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())), time));
+				te.setEndTime(addTime(te.getStartTime(), 30));
+				flag = false;	
+			}
+			else
+			{
+				te.setStartTime(addTime(
+						result.get(index - 1).getEndTime(),
+						BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
+				te.setEndTime(addTime(te.getStartTime(), 30));
+			}
+			result.add(index++, te);
+			repeat.add(te.getPoiId());
+		}
+		
+		return result;
+	}
 	private ArrayList<TourEvent> getMission(int freetime) throws SQLException,ClassNotFoundException, ParseException 
 	{
 		index = 0;

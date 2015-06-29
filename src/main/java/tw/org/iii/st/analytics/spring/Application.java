@@ -81,6 +81,16 @@ public class Application extends SpringBootServletInitializer {
 	}
 	
 	
+	@Bean(name="stJdbcTemplate") 
+	public JdbcTemplate stJdbcTemplate() throws PropertyVetoException{
+		return new JdbcTemplate(dataSourceST()); 
+	}
+	
+	
+	@Bean(name="hualienJdbcTempplate")
+	public JdbcTemplate hualienJdbcTempplate() throws PropertyVetoException{
+		return  new JdbcTemplate(dataSourceHualien());
+	}
 	
 	@Bean
 	public JobDetailFactoryBean jobDetailFactoryBean() throws PropertyVetoException{
@@ -88,8 +98,8 @@ public class Application extends SpringBootServletInitializer {
 		jobbean.setJobClass(UpdateRecommendation.class);
 		
 		Map<String, Object> map = new HashMap();
-		map.put("stJdbcTemplate", new JdbcTemplate(dataSourceST()));
-		map.put("datasource", new JdbcTemplate(dataSourceHualien()));		
+		map.put("stJdbcTemplate", stJdbcTemplate());
+		map.put("datasource", hualienJdbcTempplate());		
 		jobbean.setJobDataAsMap(map);
 		return jobbean;
 	}

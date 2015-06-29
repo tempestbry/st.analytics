@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -22,6 +23,7 @@ import tw.org.iii.model.TourEvent;
 public class ExampleController {
 
 	@Autowired
+	@Qualifier("hualienJdbcTempplate")
 	JdbcTemplate jdbcTemplate;
 
 	@RequestMapping("/hello")

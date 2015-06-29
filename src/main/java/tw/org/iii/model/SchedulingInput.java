@@ -17,6 +17,8 @@ public class SchedulingInput
 	
 	private boolean shake;
 
+	private String tourType;
+	
 	public List<String> getCityList() {
 		return cityList;
 	}
@@ -84,7 +86,14 @@ public class SchedulingInput
 	public void setShake(boolean shake) {
 		this.shake = shake;
 	}
-	
+
+	public String getTourType() {
+		return tourType;
+	}
+
+	public void setTourType(String tourType) {
+		this.tourType = tourType;
+	}
 	
 
 }
