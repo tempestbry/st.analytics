@@ -104,7 +104,7 @@ public class Application extends SpringBootServletInitializer {
 		return jobbean;
 	}
 	
-	@Bean
+	/*@Bean
 	public CronTriggerFactoryBean cronTriggerFactoryBean() throws PropertyVetoException{
 		CronTriggerFactoryBean trigger = new CronTriggerFactoryBean();
 		trigger.setJobDetail(jobDetailFactoryBean().getObject());
@@ -116,11 +116,11 @@ public class Application extends SpringBootServletInitializer {
 	@Bean
 	public SchedulerFactoryBean  schedulerFactory() throws Exception{
 		
-		/**/
+		
 		SchedulerFactoryBean bean = new SchedulerFactoryBean();
 		bean.setTriggers(cronTriggerFactoryBean().getObject());
 		return bean;
-	}
+	}*/
 
 	@Override
 	protected SpringApplicationBuilder configure(

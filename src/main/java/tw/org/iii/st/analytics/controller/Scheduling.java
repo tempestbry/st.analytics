@@ -270,7 +270,8 @@ public class Scheduling {
 						BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
 				te.setEndTime(addTime(te.getStartTime(), 30));
 			}
-			result.add(index++, te);
+			index++;
+			result.add(te);
 			repeat.add(te.getPoiId());
 		}
 		
