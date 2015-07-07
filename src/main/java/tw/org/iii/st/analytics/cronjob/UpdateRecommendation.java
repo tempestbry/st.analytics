@@ -54,10 +54,10 @@ public class UpdateRecommendation extends QuartzJobBean{
 		// TODO Auto-generated method stub
 		System.out.println("This is example cron job");
 		
-		List<Map<String, Object>> list = stJdbcTemplate.queryForList("SELECT * FROM PoiFinalView limit 20");
+		/*List<Map<String, Object>> list = stJdbcTemplate.queryForList("SELECT * FROM PoiFinalView limit 20");
 		for(Map map : list){
 			System.out.println(map.get("id"));
-		}
+		}*/
 		
 	}
 }

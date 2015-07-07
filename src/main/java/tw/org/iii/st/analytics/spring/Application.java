@@ -109,7 +109,7 @@ public class Application extends SpringBootServletInitializer {
 		CronTriggerFactoryBean trigger = new CronTriggerFactoryBean();
 		trigger.setJobDetail(jobDetailFactoryBean().getObject());
 		trigger.setStartDelay(3000);
-		trigger.setCronExpression("1 * * * * ?");
+		trigger.setCronExpression("1 0 2 * * ?");
 		return trigger;
 	} 
 	
