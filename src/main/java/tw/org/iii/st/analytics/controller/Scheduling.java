@@ -62,9 +62,9 @@ public class Scheduling {
 		// 將preference寫入條件
 		if (p.size()==0)
 		{
-			for (int i = 1; i < 7; i++)
+			for (int i = 1; i < 8; i++)
 				preference += "A.preference = 'PF" + i + "' or ";
-			preference += "A.preference = 'PF7'";
+			preference += "A.preference = 'PF8'";
 		}
 		else
 		{
@@ -242,12 +242,12 @@ public class Scheduling {
 		for(Map map : list)
 		{
 			System.out.println(map.get("sceneId"));
-			List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT A.poiId,ASTEXT(B.location) AS B FROM ScenePoi AS A,PoiFinalView AS B WHERE sceneId = "+map.get("sceneId")+" and A.poiId = B.id ORDER BY rand() LIMIT 0,1");
+			List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT A.poiId,ASTEXT(B.location) AS AAA,B.name FROM ScenePoi AS A,PoiFinalView AS B WHERE sceneId = "+map.get("sceneId")+" and A.poiId = B.id ORDER BY rand() LIMIT 0,1");
 			te = new TourEvent();
 			te.setPoiId(rs.get(0).get("poiId").toString());
-			
+			//System.out.println(rs.get(0).get("name"));
 			//取得經緯度
-			location = rs.get(0).get("B").toString().split("\\(|\\)| ");
+			location = rs.get(0).get("AAA").toString().split("\\(|\\)| ");
 			double lat = 0;
 			double lng = 0;
 			lat = Double.parseDouble(location[1]);
@@ -594,7 +594,15 @@ public class Scheduling {
 		if (rs.size() == 0) {
 			List<Integer> rs1 = QTime("SELECT time FROM euclid_distance WHERE id = '"
 					+ id + "' and arrival_id = '" + arrival + "'");
-			return rs1.get(0);
+			try
+			{
+				return rs1.get(0);
+			}
+			catch (Exception e)
+			{
+				return 0;
+			}
+			
 
 		} else {
 			return rs.get(0);
