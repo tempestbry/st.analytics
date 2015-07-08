@@ -666,7 +666,7 @@ public class Scheduling {
 		{
             public int compare(Map.Entry<String, Integer> entry1,
                                Map.Entry<String, Integer> entry2){
-                return (entry2.getValue() - entry1.getValue());
+                return (entry1.getValue() - entry2.getValue());
             }
         });
 		

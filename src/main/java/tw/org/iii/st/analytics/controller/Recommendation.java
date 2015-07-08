@@ -264,7 +264,7 @@ public class Recommendation {
 		if (24-hour>2)
 		{
 			sqlresult = Query("SELECT A.place_id,checkins,px,py FROM scheduling AS A, OpenTimeArray AS B "
-					+ "WHERE B.weekday = '"+ti.weekday+"' and ("+hour+"_Oclock = 1 and "+(hour+1)+"_Oclock = 1 and "+(hour+2)+"_Oclock=1) "
+					+ "WHERE B.weekday = '"+ti.weekday+"' and ("+hour+"_Oclock = 1 and "+(hour+1)+"_Oclock = 1 and "+(hour+2)+"_Oclock=1) and A.type <> '4' "
 					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id GROUP BY A.fb_id");	
 		}
 		else
@@ -272,13 +272,13 @@ public class Recommendation {
 			if (24-hour==1)
 			{
 				sqlresult = Query("SELECT A.place_id,checkins,px,py FROM scheduling AS A, OpenTimeArray AS B "
-						+ "WHERE B.weekday = '"+ti.weekday+"' and ("+hour+"_Oclock = 1 and 0_Oclock = 1 and 1_Oclock=1) "
+						+ "WHERE B.weekday = '"+ti.weekday+"' and ("+hour+"_Oclock = 1 and 0_Oclock = 1 and 1_Oclock=1) and A.type <> '4' "
 						+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id GROUP BY A.fb_id");
 			}
 			else if (24-hour==2)
 			{
 				sqlresult = Query("SELECT A.place_id,checkins,px,py FROM scheduling AS A, OpenTimeArray AS B "
-						+ "WHERE B.weekday = '"+ti.weekday+"' and ("+hour+"_Oclock = 1 and "+(hour+1)+"_Oclock = 1 and 0_Oclock=1) "
+						+ "WHERE B.weekday = '"+ti.weekday+"' and ("+hour+"_Oclock = 1 and "+(hour+1)+"_Oclock = 1 and 0_Oclock=1) and A.type <> '4' "
 						+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id GROUP BY A.fb_id");	
 			}
 		}
@@ -304,7 +304,7 @@ public class Recommendation {
 			//找出前30名的打卡點
 			sqlresult = Query("SELECT A.place_id,A.checkins,A.px,A.py FROM scheduling AS A, OpenTimeArray AS B "
 					+ "WHERE B.weekday = '"+ti.weekday+"' "
-					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id GROUP BY fb_id ORDER BY checkins DESC limit 0,30");
+					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.type <> '4' GROUP BY fb_id ORDER BY checkins DESC limit 0,30");
 			for (PoiCheckins p : sqlresult)
 			{
 				limit++;
@@ -314,7 +314,7 @@ public class Recommendation {
 			//30個裡面隨機挑選
 			sqlresult = Query("SELECT A.place_id,A.checkins,A.px,A.py FROM scheduling AS A, OpenTimeArray AS B "
 					+ "WHERE B.weekday = '"+ti.weekday+"' "
-					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.checkins > 5000 GROUP BY fb_id ORDER BY RAND()");
+					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.checkins > 5000 and A.type <> '4' GROUP BY fb_id ORDER BY RAND()");
 			for (PoiCheckins p : sqlresult)
 			{
 				if (i==5)
@@ -360,6 +360,8 @@ public class Recommendation {
 			if (i==5)
 				break;
 	    }
+		
+		System.out.println("SELECT * FROM scheduling WHERE place_id = '"+result[0]+"' or place_id = '"+result[1]+"' or place_id = '"+result[2]+"' or place_id = '"+result[3]+"' or place_id = '"+result[4]+"'");
 		return result;
 	}
 	
