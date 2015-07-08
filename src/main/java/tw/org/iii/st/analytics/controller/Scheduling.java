@@ -77,7 +77,7 @@ public class Scheduling {
 		// 取得旅程總時間
 		int freetime = FreeTime(si.getStartTime(), si.getEndTime() );
 		
-		if (si.getTourType() != null && !si.getTourType().contains("play-")) {
+		if (si.getTourType() == null || !si.getTourType().contains("play-")) {
 			PlanResult.addAll(findTop(freetime));
 			freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),
 					si.getEndTime() );
