@@ -50,6 +50,11 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json)
 			throws ParseException, ClassNotFoundException, SQLException {
 
+		HashMap<String,String> mapping = new HashMap<String,String>();
+		for (int i=1;i<9;i++)
+			mapping.put("TH" + (i+9), "PF" + i);
+		
+		
 		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
 //	for (int j=0;j<1000;j++)
 //	{
@@ -62,15 +67,15 @@ public class Scheduling {
 		// 將preference寫入條件
 		if (p.size()==0)
 		{
-			for (int i = 10; i < 17; i++)
-				preference += "A.preference = 'TH" + i + "' or ";
-			preference += "A.preference = 'TH17'";
+			for (int i = 1; i < 8; i++)
+				preference += "A.preference = 'PF" + i + "' or ";
+			preference += "A.preference = 'PF8'";
 		}
 		else
 		{
 			for (int i = 0; i < p.size() - 1; i++)
-				preference += "A.preference = '" + p.get(i) + "' or ";
-			preference += "A.preference = '" + p.get(p.size() - 1) + "'";
+				preference += "A.preference = '" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "' or ";
+			preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
 		}
 	
 
@@ -134,14 +139,14 @@ public class Scheduling {
 		for (schedulingInfo i : rs) {
 			//是否有設定出發POI
 			if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-				dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(), si
-						.getGps().getLat());
+				dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(), si
+						.getGps().getLng());
 			} else {
 				List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
 						+ si.getStartPoiId() + "'");
 				if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0) //POI沒經緯度則以User所在點做起點
-					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(),
-							si.getGps().getLat());
+					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),
+							si.getGps().getLng());
 				else
 					dis = Distance(i.getPy(), i.getPx(), gp.get(0).getY(), gp
 							.get(0).getX());
@@ -185,14 +190,13 @@ public class Scheduling {
 			HashMap<String,TourEvent> _tmp = new HashMap<String,TourEvent>();
 			for (schedulingInfo i : rs) {
 				if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(), si
-							.getGps().getLat());
+					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),si.getGps().getLng());
 				} else {
 					List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
 							+ si.getStartPoiId() + "'");
 					if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0)
-						dis = Distance(i.getPy(), i.getPx(), si.getGps().getLng(),
-								si.getGps().getLat());
+						dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),
+								si.getGps().getLng());
 					else
 						dis = Distance(i.getPy(), i.getPx(), gp.get(0).getY(), gp
 								.get(0).getX());
