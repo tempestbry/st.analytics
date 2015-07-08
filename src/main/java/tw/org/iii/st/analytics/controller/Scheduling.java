@@ -62,9 +62,9 @@ public class Scheduling {
 		// 將preference寫入條件
 		if (p.size()==0)
 		{
-			for (int i = 1; i < 8; i++)
-				preference += "A.preference = 'PF" + i + "' or ";
-			preference += "A.preference = 'PF8'";
+			for (int i = 10; i < 17; i++)
+				preference += "A.preference = 'TH" + i + "' or ";
+			preference += "A.preference = 'TH17'";
 		}
 		else
 		{
@@ -77,7 +77,7 @@ public class Scheduling {
 		// 取得旅程總時間
 		int freetime = FreeTime(si.getStartTime(), si.getEndTime() );
 		
-		if (si.getTourType() == null || !si.getTourType().contains("play-")) {
+		if (si.getTourType() == null || "".equals(si.getTourType()) || !si.getTourType().contains("play-")) {
 			PlanResult.addAll(findTop(freetime));
 			freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),
 					si.getEndTime() );
@@ -148,13 +148,13 @@ public class Scheduling {
 			}
 
 			Date startTime = si.getStartTime();
-			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13) //非用餐時段暫不提供餐廳景點(餐廳打卡數都偏高容易誤推)
-					&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
-				if (i.getPreference().equals("PF1")
-						|| "".equals(i.getPreference())
-						|| i.getPreference() == null)
-					continue;
-			}
+//			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13) //非用餐時段暫不提供餐廳景點(餐廳打卡數都偏高容易誤推)
+//					&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
+//				if (i.getPreference().equals("PF1")
+//						|| "".equals(i.getPreference())
+//						|| i.getPreference() == null)
+//					continue;
+//			}
 			int time = (int) (dis / 0.7);
 			if (time < 45 && time < (freetime * 60)) { //行車時間45分鐘內可到且空閒時間也夠
 				te = new TourEvent();
@@ -173,6 +173,14 @@ public class Scheduling {
 		//當上面無結果時，則解放行車時間的條件
 		if (result.size()==0)
 		{
+			rs = Query("SELECT A.place_id,A.preference,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and B.weekday = '"
+					+ weekday
+					+ "' and "
+					+ date.getHours()
+					+ "_Oclock = 1 and ("
+					+ preference + ") GROUP BY fb_id ORDER BY rand() limit 0,40");
+			
+			
 			HashMap<String,Integer> tmp = new HashMap<String,Integer>();
 			HashMap<String,TourEvent> _tmp = new HashMap<String,TourEvent>();
 			for (schedulingInfo i : rs) {
@@ -191,13 +199,13 @@ public class Scheduling {
 				}
 
 				Date startTime = si.getStartTime();
-				if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
-						&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
-					if (i.getPreference().equals("PF1")
-							|| "".equals(i.getPreference())
-							|| i.getPreference() == null)
-						continue;
-				}
+//				if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
+//						&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
+//					if (i.getPreference().equals("PF1")
+//							|| "".equals(i.getPreference())
+//							|| i.getPreference() == null)
+//						continue;
+//				}
 				int time = (int) (dis / 0.7);
 				
 				te = new TourEvent();
@@ -270,8 +278,7 @@ public class Scheduling {
 						BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
 				te.setEndTime(addTime(te.getStartTime(), 30));
 			}
-			index++;
-			result.add(te);
+			result.add(index++, te);
 			repeat.add(te.getPoiId());
 		}
 		
