@@ -51,6 +51,7 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json)
 			throws ParseException, ClassNotFoundException, SQLException {
 
+		//建立新舊preference比照表
 		HashMap<String,String> mapping = new HashMap<String,String>();
 		for (int i=1;i<9;i++)
 			mapping.put("TH" + (i+9), "PF" + i);
@@ -63,8 +64,6 @@ public class Scheduling {
 		
 		
 		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
-//	for (int j=0;j<1000;j++)
-//	{
 		si = json;
 
 		/**test*/
@@ -126,11 +125,7 @@ public class Scheduling {
 
 		finalResult = new ArrayList<TourEvent>();
 		finalResult.addAll(PlanResult);
-		close();
-//	}
-		
-		
-		
+		close();		
 		
 		return finalResult;
 	}
