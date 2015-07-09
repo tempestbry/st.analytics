@@ -2,6 +2,7 @@ package tw.org.iii.st.analytics.controller;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -55,12 +56,30 @@ public class Scheduling {
 			mapping.put("TH" + (i+9), "PF" + i);
 		
 		
+	
+		
+		
+		
+		
+		
 		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
 //	for (int j=0;j<1000;j++)
 //	{
 		si = json;
-		weekday = getWeekday(si.getStartTime());
 
+		/**test*/
+		System.out.println(si.getStartTime());
+		Timestamp stamp = new Timestamp(System.currentTimeMillis());
+
+		SimpleDateFormat dfDate = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
+
+		String dateNow = dfDate.format(stamp);
+		System.out.println(dateNow);
+		System.out.println(si.getEndTime());
+		
+		
+		weekday = getWeekday(si.getStartTime());
+		
 		preference = "";
 		List<String> p = si.getPreferenceList();
 		
@@ -225,6 +244,7 @@ public class Scheduling {
 			List<Map.Entry<String, Integer>> rank = sort(tmp);
 			result.add(_tmp.get(rank.get(0).getKey()));
 			index++;
+			repeat.add(rank.get(0).getKey());
 		}
 		return result;
 	}
@@ -463,11 +483,11 @@ public class Scheduling {
 		while (true) {
 			//取得上一個景點後找出在有限時間內還可以去的景點
 			te = costTime(PlanResult.get(index - 1).getEndTime(), start,
-					si.getEndPoiId(), 45, 10000);
+					si.getEndPoiId(), lastTime, 10000);
 			if ("".equals(te.getPoiId()) || te.getPoiId() == null) {
 				if (lastTime > 60) {
 					te = costTime(PlanResult.get(index - 1).getEndTime(),
-							start, si.getEndPoiId(), 60, 5000);
+							start, si.getEndPoiId(), lastTime, 5000);
 					if ("".equals(te.getPoiId()) || te.getPoiId() == null) {
 						if (!repeat.contains(te.getPoiId())) {
 							if (!"".equals(si.getEndPoiId())
@@ -529,7 +549,7 @@ public class Scheduling {
 				+ "' AND ("
 				+ preference
 				+ ") AND "
-				+ "B.Place_Id = A.arrival_id AND A.time < "
+				+ "B.Place_Id = A.arrival_id AND (A.time + A.stay_time) < "
 				+ range
 				+ " AND A.checkins > "
 				+ checkin
@@ -541,12 +561,12 @@ public class Scheduling {
 				+ "_Oclock = 1 ORDER BY RAND() DESC");
 		for (SchedulingDis sd : rs) // 找出目前所在景點可考慮去的鄰近景點候選清單
 		{
-			//非用餐時段暫時不推餐廳
-			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
-					&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
-				if (sd.getPreference().equals("PF1"))
-					continue;
-			}
+//			//非用餐時段暫時不推餐廳
+//			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
+//					&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
+//				if (sd.getPreference().equals("PF1"))
+//					continue;
+//			}
 			//沒有目的地
 			if ("".equals(destination) || destination == null) {
 				if (!repeat.contains(sd.getPlaceID())
