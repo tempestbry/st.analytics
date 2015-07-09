@@ -68,12 +68,18 @@ public class Scheduling {
 
 		/**test*/
 		System.out.println(si.getStartTime());
-		Timestamp stamp = new Timestamp(System.currentTimeMillis());
-
-		SimpleDateFormat dfDate = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
-
-		String dateNow = dfDate.format(stamp);
-		System.out.println(dateNow);
+		Calendar cal = Calendar.getInstance(); // creates calendar
+		cal.setTime(si.getStartTime()); // sets calendar time/date
+		cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
+		si.setStartTime(cal.getTime());
+		System.out.println(si.getStartTime());
+		
+		
+		System.out.println(si.getEndTime());
+		cal = Calendar.getInstance(); // creates calendar
+		cal.setTime(si.getEndTime()); // sets calendar time/date
+		cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
+		si.setEndTime(cal.getTime());
 		System.out.println(si.getEndTime());
 		
 		
