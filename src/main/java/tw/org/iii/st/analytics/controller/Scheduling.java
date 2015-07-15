@@ -43,6 +43,7 @@ public class Scheduling {
 	private ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
 	private ArrayList<String> repeat = new ArrayList<String>();
 	private int index;
+	private String city;
 	private String preference;
 	private String weekday;
 
@@ -55,13 +56,6 @@ public class Scheduling {
 		HashMap<String,String> mapping = new HashMap<String,String>();
 		for (int i=1;i<9;i++)
 			mapping.put("TH" + (i+9), "PF" + i);
-		
-		
-	
-		
-		
-		
-		
 		
 		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
 		si = json;
@@ -84,8 +78,9 @@ public class Scheduling {
 		
 		
 		weekday = getWeekday(si.getStartTime());
-		
+		city = "";
 		preference = "";
+		List<String> c = si.getCityList();
 		List<String> p = si.getPreferenceList();
 		
 		// 將preference寫入條件
@@ -102,7 +97,11 @@ public class Scheduling {
 			preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
 		}
 	
-
+		//將city寫入條件
+		for (int i = 1; i < c.size() - 1; i++)
+			city += "A.county = '"+c.get(i)+"' or ";
+		city += "A.county = '"+c.get(c.size()-1)+"'";
+		
 		// 取得旅程總時間
 		int freetime = FreeTime(si.getStartTime(), si.getEndTime() );
 		
@@ -154,7 +153,7 @@ public class Scheduling {
 				+ "' and "
 				+ date.getHours()
 				+ "_Oclock = 1 and ("
-				+ preference + ") GROUP BY fb_id ORDER BY rand() limit 0,40");
+				+ preference + ") and ("+city+") GROUP BY fb_id ORDER BY rand() limit 0,40");
 		double dis = 0;
 		for (schedulingInfo i : rs) {
 			//是否有設定出發POI
@@ -203,7 +202,7 @@ public class Scheduling {
 					+ "' and "
 					+ date.getHours()
 					+ "_Oclock = 1 and ("
-					+ preference + ") GROUP BY fb_id ORDER BY rand() limit 0,40");
+					+ preference + ") and ("+city+") GROUP BY fb_id ORDER BY rand() limit 0,40");
 			
 			
 			HashMap<String,Integer> tmp = new HashMap<String,Integer>();
@@ -275,36 +274,52 @@ public class Scheduling {
 		for(Map map : list)
 		{
 			System.out.println(map.get("sceneId"));
-			List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT A.poiId,ASTEXT(B.location) AS AAA,B.name FROM ScenePoi AS A,PoiFinalView AS B WHERE sceneId = "+map.get("sceneId")+" and A.poiId = B.id ORDER BY rand() LIMIT 0,1");
-			te = new TourEvent();
-			te.setPoiId(rs.get(0).get("poiId").toString());
-			//System.out.println(rs.get(0).get("name"));
-			//取得經緯度
-			location = rs.get(0).get("AAA").toString().split("\\(|\\)| ");
-			double lat = 0;
-			double lng = 0;
-			lat = Double.parseDouble(location[1]);
-			lng = Double.parseDouble(location[2]);
-			gpt.setLat(lat);
-			gpt.setLng(lng);
+			int item=0;
+			while (true)
+			{
+				List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT A.poiId,ASTEXT(B.location) AS AAA,B.name FROM ScenePoi AS A,PoiFinalView AS B WHERE sceneId = "+map.get("sceneId")+" and A.poiId = B.id ORDER BY rand() LIMIT 0,1");
+				te = new TourEvent();
+				te.setPoiId(rs.get(item).get("poiId").toString());
+				//System.out.println(rs.get(0).get("name"));
+				//取得經緯度
+				location = rs.get(0).get("AAA").toString().split("\\(|\\)| ");
+				double lat = 0;
+				double lng = 0;
+				lat = Double.parseDouble(location[1]);
+				lng = Double.parseDouble(location[2]);
+				gpt.setLat(lat);
+				gpt.setLng(lng);
+				
+				if (flag)
+				{
+					double dis = Distance(gpt.getLat(), gpt.getLng(), si.getGps().getLat(), si.getGps().getLng());
+					int time = (int) (dis / 0.7);
+					te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())), time));
+					te.setEndTime(addTime(te.getStartTime(), 30));
+					flag = false;	
+				}
+				else
+				{
+					te.setStartTime(addTime(
+							result.get(index - 1).getEndTime(),
+							BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
+					te.setEndTime(addTime(te.getStartTime(), 30));
+				}
+				try
+				{
+					result.add(index++, te);
+					repeat.add(te.getPoiId());
+					break;
+				}
+				catch (Exception e)
+				{
+					e.printStackTrace();
+					item++;
+					continue;
+				}
+				
+			}
 			
-			if (flag)
-			{
-				double dis = Distance(gpt.getLat(), gpt.getLng(), si.getGps().getLat(), si.getGps().getLng());
-				int time = (int) (dis / 0.7);
-				te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())), time));
-				te.setEndTime(addTime(te.getStartTime(), 30));
-				flag = false;	
-			}
-			else
-			{
-				te.setStartTime(addTime(
-						result.get(index - 1).getEndTime(),
-						BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
-				te.setEndTime(addTime(te.getStartTime(), 30));
-			}
-			result.add(index++, te);
-			repeat.add(te.getPoiId());
 		}
 		
 		return result;
@@ -550,6 +565,7 @@ public class Scheduling {
 				+ "' AND ("
 				+ preference
 				+ ") AND "
+				+ "("+city+") AND "
 				+ "B.Place_Id = A.arrival_id AND (A.time + A.stay_time) < "
 				+ range
 				+ " AND A.checkins > "
@@ -678,6 +694,7 @@ public class Scheduling {
 		index = 0;
 		preference = "";
 		weekday = "";
+		city = "";
 	}
 	private static List<Map.Entry<String, Integer>> sort(HashMap<String,Integer> a)
 	{
