@@ -107,8 +107,7 @@ public class Scheduling {
 		
 		if (si.getTourType() == null || "".equals(si.getTourType()) || !si.getTourType().contains("play-")) {
 			PlanResult.addAll(findTop(freetime));
-			freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),
-					si.getEndTime() );
+			//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
 			getOtherPOI(freetime);
 
 			for (TourEvent t : PlanResult) {
@@ -118,8 +117,7 @@ public class Scheduling {
 			System.out.println(lastTime);
 		} else {
 			PlanResult.addAll(getMission1(freetime));
-			freetime = FreeTime(PlanResult.get(2).getEndTime(),
-					si.getEndTime());
+			//freetime = FreeTime(PlanResult.get(2).getEndTime(),si.getEndTime());
 			getOtherPOI(freetime);
 			for (TourEvent t : PlanResult) {
 				System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
