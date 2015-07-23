@@ -1,11 +1,18 @@
 package tw.org.iii.st.analytics.controller;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.sql.DataSourceDefinition;
 
@@ -38,51 +45,108 @@ public class Scheduling {
 	private JdbcTemplate stJdbcTemplate;
 
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-	private SchedulingInput si;
-	private int lastTime;
-	private ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
-	private ArrayList<String> repeat = new ArrayList<String>();
-	private int index;
-	private String city;
-	private String preference;
-	private String weekday;
-
+	
 	@RequestMapping("/QuickPlan")
 	private @ResponseBody
-	List<TourEvent> StartPlan(@RequestBody SchedulingInput json)
-			throws ParseException, ClassNotFoundException, SQLException {
+	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException {
 
-		//建立新舊preference比照表
-		HashMap<String,String> mapping = new HashMap<String,String>();
-		for (int i=1;i<9;i++)
-			mapping.put("TH" + (i+9), "PF" + i);
-		
+		//行程規劃結果
+		ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
 		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
-		si = json;
 
+		int lastTime;
+		
+		HashMap<String,String> mapping = startMapping(); //建立新舊preference比照表
+		ArrayList<String> repeat = new ArrayList<String>();
+		String city = getCity(json.getCityList()); //取得city
+		String preference = getPreference(json.getPreferenceList(),mapping); //取得preference
+		String weekday = getWeekday(json.getStartTime()); //知道當天星期幾
+		
+		int freetime = FreeTime(json.getStartTime(), json.getEndTime()); //取得旅程總時間
+		int index=0;
+		
+		
 		/**test*/
-		System.out.println(si.getStartTime());
-		Calendar cal = Calendar.getInstance(); // creates calendar
-		cal.setTime(si.getStartTime()); // sets calendar time/date
-		//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
-		si.setStartTime(cal.getTime());
-		System.out.println(si.getStartTime());
+		System.out.println(json.getStartTime());
+		System.out.println(json.getEndTime());
+//		Calendar cal = Calendar.getInstance(); // creates calendar
+//		cal.setTime(si.getStartTime()); // sets calendar time/date
+//		//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
+//		si.setStartTime(cal.getTime());
+//		System.out.println(si.getStartTime());
+//		
+//		System.out.println(si.getEndTime());
+//		cal = Calendar.getInstance(); // creates calendar
+//		cal.setTime(si.getEndTime()); // sets calendar time/date
+//		//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
+//		si.setEndTime(cal.getTime());
+//		System.out.println(si.getEndTime());
+
 		
+		tourInfo ti = new tourInfo(index,freetime,json.getStartTime(),json.getEndTime(),json.getGps().getLng(),json.getGps().getLat());
+		ti.weekday = weekday;
+		ti.preference = preference;
+		ti.city = city;
+		ti.startPOI = json.getStartPoiId();
+		ti.endPOI = json.getEndPoiId();
 		
-		System.out.println(si.getEndTime());
-		cal = Calendar.getInstance(); // creates calendar
-		cal.setTime(si.getEndTime()); // sets calendar time/date
-		//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
-		si.setEndTime(cal.getTime());
-		System.out.println(si.getEndTime());
+		try
+		{
+			ti.flag = askGoogle(ti.px,ti.py);
+		}
+		catch (IOException e)
+		{
+		}
 		
+		if (json.getEndPoiId() != null || !"".equals(json.getEndPoiId()))
+			ti.repeat.add(json.getEndPoiId());
+		//一般行程規劃(當日)
+		if (json.getTourType() == null || "".equals(json.getTourType()) || !json.getTourType().contains("play-")) {
+//			SimpleDateFormat sdFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+//			TourEvent test = new TourEvent();
+//			test.setPoiId("C1_315081200H_000101");
+//			test.setStartTime(sdFormat.parse("2015/07/20 10:43:28"));
+//			test.setEndTime(sdFormat.parse("2015/07/20 15:43:28"));
+//			PlanResult.add(test);
+//			
+			
+			PlanResult.addAll(findTop(ti));
+			ti.repeat.add(PlanResult.get(0).getPoiId()); //將選過的景點加入repeat清單
+			ti.index = PlanResult.size(); //index推進
+			
+			//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
+			PlanResult = getOtherPOI(PlanResult,ti);
+
+			for (TourEvent t : PlanResult) {
+				List<String> name = placeName("SELECT name FROM Detail WHERE poiId = '"+t.getPoiId()+"'");
+				System.out.println(name.get(0) + "," + t.getPoiId() + "," + t.getStartTime() + ","
+						+ t.getEndTime());
+			}
+
+		} else { //任務模式
+			PlanResult.addAll(getMission1(ti,json.getTourType()));
+			for (TourEvent r : PlanResult)
+				ti.repeat.add(r.getPoiId()); //將選過的景點加入repeat清單
+			ti.index = PlanResult.size(); //index推進
+			
+			
+			//freetime = FreeTime(PlanResult.get(2).getEndTime(),si.getEndTime());
+			PlanResult = getOtherPOI(PlanResult,ti);
+			for (TourEvent t : PlanResult) {
+				System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
+						+ t.getEndTime());
+			}
+
+		}
+
+		finalResult = new ArrayList<TourEvent>();
+		finalResult.addAll(PlanResult);
 		
-		weekday = getWeekday(si.getStartTime());
-		city = "";
-		preference = "";
-		List<String> c = si.getCityList();
-		List<String> p = si.getPreferenceList();
-		
+		return finalResult;
+	}
+	private String getPreference(List<String> p,HashMap<String,String> mapping)
+	{
+		String preference="";
 		// 將preference寫入條件
 		if (p.size()==0)
 		{
@@ -96,161 +160,211 @@ public class Scheduling {
 				preference += "A.preference = '" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "' or ";
 			preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
 		}
-	
+		
+		return preference;
+		
+	}
+	private String getCity(List<String> c)
+	{
+		String city="";
 		//將city寫入條件
 		for (int i = 1; i < c.size() - 1; i++)
 			city += "A.county = '"+c.get(i)+"' or ";
 		city += "A.county = '"+c.get(c.size()-1)+"'";
-		
-		// 取得旅程總時間
-		int freetime = FreeTime(si.getStartTime(), si.getEndTime() );
-		
-		if (si.getTourType() == null || "".equals(si.getTourType()) || !si.getTourType().contains("play-")) {
-			PlanResult.addAll(findTop(freetime));
-			//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
-			getOtherPOI(freetime);
-
-			for (TourEvent t : PlanResult) {
-				System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
-						+ t.getEndTime());
-			}
-			System.out.println(lastTime);
-		} else {
-			PlanResult.addAll(getMission1(freetime));
-			//freetime = FreeTime(PlanResult.get(2).getEndTime(),si.getEndTime());
-			getOtherPOI(freetime);
-			for (TourEvent t : PlanResult) {
-				System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
-						+ t.getEndTime());
-			}
-			System.out.println(lastTime);
-		}
-
-		finalResult = new ArrayList<TourEvent>();
-		finalResult.addAll(PlanResult);
-		close();		
-		
-		return finalResult;
+		return city;
 	}
-
+	private HashMap<String,String> startMapping()
+	{
+		HashMap<String,String> mapping = new HashMap<String,String>();
+		for (int i=1;i<9;i++)
+			mapping.put("TH" + (i+9), "PF" + i);
+		
+		return mapping;
+	}
 	
-	private ArrayList<TourEvent> findTop(int freetime) throws ParseException,
-			SQLException {
-		List<schedulingInfo> rs;
+	private ArrayList<TourEvent> findTop(tourInfo ti) throws ParseException,SQLException 
+	{
+		
 		ArrayList<TourEvent> result = new ArrayList<TourEvent>();
 		TourEvent te;
 
 		Calendar cal;
-		Date date = si.getStartTime();
+		Date date = ti.startTime;
 		cal = Calendar.getInstance();
-		cal.setTime(date);
+		cal.setTime(date);		
 
-		// 找出Top
-		rs = Query("SELECT A.place_id,A.preference,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and A.checkins > 30000 and B.weekday = '"
-				+ weekday
+		// 找出Top (打卡數>30000, 星期幾跟時段要符合, 偏好, 縣市, 經緯度不為0 or null取40個景點候選做random)
+		List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT A.place_id,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and A.checkins > 30000 and B.weekday = '"
+				+ ti.weekday
 				+ "' and "
 				+ date.getHours()
 				+ "_Oclock = 1 and ("
-				+ preference + ") and ("+city+") GROUP BY fb_id ORDER BY rand() limit 0,40");
+				+ ti.preference + ") and ("
+				+ ""+ti.city+") and (px IS not null and px <> 0) and (py IS not null and py <>0) GROUP BY fb_id ORDER BY rand() limit 0,40");
+
 		double dis = 0;
-		for (schedulingInfo i : rs) {
+		for (Map<String, Object> i : rs) {
 			//是否有設定出發POI
-			if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-				dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(), si
-						.getGps().getLng());
+			if ("".equals(ti.startPOI) || ti.startPOI == null) {
+				dis = Distance((double)i.get("py"), (double)i.get("px"), ti.py, ti.px);
 			} else {
-				List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
-						+ si.getStartPoiId() + "'");
+				List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"+ ti.startPOI + "'");
 				if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0) //POI沒經緯度則以User所在點做起點
-					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),
-							si.getGps().getLng());
+					dis = Distance((double)i.get("py"), (double)i.get("px"), ti.py, ti.px);
 				else
-					dis = Distance(i.getPy(), i.getPx(), gp.get(0).getY(), gp
-							.get(0).getX());
+					dis = Distance(gp.get(0).getY(), gp.get(0).getX(),ti.py, ti.px);
 			}
 
-			Date startTime = si.getStartTime();
-//			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13) //非用餐時段暫不提供餐廳景點(餐廳打卡數都偏高容易誤推)
-//					&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
-//				if (i.getPreference().equals("PF1")
-//						|| "".equals(i.getPreference())
-//						|| i.getPreference() == null)
-//					continue;
-//			}
 			int time = (int) (dis / 0.7);
-			if (time < 45 && time < (freetime * 60)) { //行車時間45分鐘內可到且空閒時間也夠
+			
+			if (ti.flag) //在花東以外
+			{
 				te = new TourEvent();
-				te.setPoiId(i.getPlaceID());
-
-				te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())),
-						time));
-				te.setEndTime(addTime(te.getStartTime(), i.getStayTime()));
-
-				result.add(index++, te);
+				te.setPoiId(i.get("place_id").toString());
+				te.setStartTime(addTime(cal.getTime(),time));
+				te.setEndTime(addTime(te.getStartTime(), (int)i.get("stay_Time")));
+				result.add(te);
 				break;
 			}
+			else //在花東
+			{
+				if (time < 45 && time < (ti.freeTime * 60)) { //行車時間45分鐘內可到且空閒時間也夠
+					te = new TourEvent();
+					te.setPoiId(i.get("place_id").toString());
+					te.setStartTime(addTime(cal.getTime(),time));
+					te.setEndTime(addTime(te.getStartTime(), (int)i.get("stay_Time")));
+					result.add(te);
+					break;
+				}
+			}
+			
 		}
-		
-		
+
 		//當上面無結果時，則解放行車時間的條件
 		if (result.size()==0)
 		{
-			rs = Query("SELECT A.place_id,A.preference,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and B.weekday = '"
-					+ weekday
-					+ "' and "
-					+ date.getHours()
-					+ "_Oclock = 1 and ("
-					+ preference + ") and ("+city+") GROUP BY fb_id ORDER BY rand() limit 0,40");
-			
-			
+				
 			HashMap<String,Integer> tmp = new HashMap<String,Integer>();
 			HashMap<String,TourEvent> _tmp = new HashMap<String,TourEvent>();
-			for (schedulingInfo i : rs) {
-				if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-					dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),si.getGps().getLng());
+			for (Map<String, Object> i : rs)
+			{
+				if ("".equals(ti.startPOI) || ti.startPOI == null) {
+					dis = Distance((double)i.get("py"), (double)i.get("px"), ti.py, ti.px);
 				} else {
-					List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
-							+ si.getStartPoiId() + "'");
-					if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0)
-						dis = Distance(i.getPy(), i.getPx(), si.getGps().getLat(),
-								si.getGps().getLng());
+					List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"+ ti.startPOI + "'");
+					if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0) //POI沒經緯度則以User所在點做起點
+						dis = Distance((double)i.get("py"), (double)i.get("px"), ti.py, ti.px);
 					else
-						dis = Distance(i.getPy(), i.getPx(), gp.get(0).getY(), gp
-								.get(0).getX());
+						dis = Distance(gp.get(0).getY(), gp.get(0).getX(),ti.py, ti.px);
 				}
 
-				Date startTime = si.getStartTime();
-//				if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
-//						&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
-//					if (i.getPreference().equals("PF1")
-//							|| "".equals(i.getPreference())
-//							|| i.getPreference() == null)
-//						continue;
-//				}
+
 				int time = (int) (dis / 0.7);
 				
 				te = new TourEvent();
-				te.setPoiId(i.getPlaceID());
-
-				te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())),
-						time));
-				te.setEndTime(addTime(te.getStartTime(), i.getStayTime()));
-				_tmp.put(i.getPlaceID(), te);
-				tmp.put(i.getPlaceID(), time);
+				te.setPoiId(i.get("A.place_id").toString());
+				te.setStartTime(addTime(cal.getTime(),time));
+				te.setEndTime(addTime(te.getStartTime(), (int)i.get("stay_Time")));
+				_tmp.put(i.get("A.place_id").toString(), te);
+				tmp.put(i.get("A.place_id").toString(), time);
 			}
 			//找最近可到的景點作為起始點
 			List<Map.Entry<String, Integer>> rank = sort(tmp);
 			result.add(_tmp.get(rank.get(0).getKey()));
-			index++;
-			repeat.add(rank.get(0).getKey());
 		}
 		return result;
 	}
-
-	
-	private ArrayList<TourEvent> getMission1(int freetime) throws ParseException, SQLException
+	private boolean askGoogle(double px,double py) throws IOException
 	{
-		String type = si.getTourType().split("play-")[1];
+		String county[] = {"台東","花蓮"};
+		
+		String html = request("http://maps.google.com/maps/api/geocode/json?latlng="+py+","+px+"&language=zh-TW&sensor=true","UTF-8");
+		
+		Pattern p = Pattern.compile("\"long_name\" : \".{2}[縣市]\","); 
+		Matcher m = p.matcher(html);
+		
+		String city="";
+		if (m.find())
+		{
+			city = Parser(m.group(),"\"long_name\" : \"","\",",1);
+		}
+		for (String c : county)
+		{
+			if (city.contains(c))
+				return false;
+		}
+		return true;
+
+	}
+	private  String request(String url,String type) throws IOException
+	{
+		StringBuilder results = new StringBuilder();
+		try
+		{
+			URL myURL = new URL(url);
+	        HttpURLConnection connection = (HttpURLConnection) myURL.openConnection();
+	        connection.setRequestMethod("GET");
+	        connection.setDoOutput(true);
+	        connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+	        connection.connect();
+	        
+	        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(),type));
+	        
+	        String line;
+	        while ((line = reader.readLine()) != null) {
+	            results.append(line);
+	        }
+
+	        connection.disconnect();
+	        
+		}
+		catch (Exception e)
+		{
+			results.append("");
+		}
+		return results.toString();
+		
+	}
+	private String Parser(String text,String front,String end,int type)
+	{
+		int from=0;
+		int finish=0;
+		
+		if (text.indexOf(front)==-1 || text.indexOf(end) == -1)
+			return "";
+		switch (type)
+		{
+			//前後tag都是第一次出現
+			case 1:
+				from = text.indexOf(front)+front.length();
+				finish = text.indexOf(end);
+				break;
+			//end tag為出現在 front之後的第一個
+			case 2:
+				from = text.indexOf(front)+front.length();
+				finish = text.indexOf(end,from);
+				break;
+			//前後tag都是最後一次出現
+			case 3:
+				from = text.lastIndexOf(front)+front.length();
+				finish = text.lastIndexOf(end);
+				break;
+		}
+		try
+		{
+			return text.substring(from,finish).replace("'", "").replace("\r", "").replace("\n", "").trim();
+		}
+		catch (Exception e)
+		{
+			return "";
+		}
+
+	}
+	
+	
+	private ArrayList<TourEvent> getMission1(tourInfo ti,String playType) throws ParseException, SQLException
+	{
+		String type = playType.split("play-")[1];
 		
 		
 		GeoPoint gpt = new GeoPoint();
@@ -259,7 +373,7 @@ public class Scheduling {
 		
 		//起始時間
 		Calendar cal;
-		Date date = si.getStartTime();
+		Date date = ti.startTime;
 		cal = Calendar.getInstance();
 		cal.setTime(date);
 		
@@ -290,7 +404,7 @@ public class Scheduling {
 				
 				if (flag)
 				{
-					double dis = Distance(gpt.getLat(), gpt.getLng(), si.getGps().getLat(), si.getGps().getLng());
+					double dis = Distance(gpt.getLat(), gpt.getLng(), ti.py, ti.px);
 					int time = (int) (dis / 0.7);
 					te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())), time));
 					te.setEndTime(addTime(te.getStartTime(), 30));
@@ -299,14 +413,13 @@ public class Scheduling {
 				else
 				{
 					te.setStartTime(addTime(
-							result.get(index - 1).getEndTime(),
-							BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
+							result.get(ti.index - 1).getEndTime(),
+							BetweenTime(result.get(ti.index - 1).getPoiId(), rs.get(0).get("poiId").toString())));
 					te.setEndTime(addTime(te.getStartTime(), 30));
 				}
 				try
 				{
-					result.add(index++, te);
-					repeat.add(te.getPoiId());
+					result.add(ti.index++, te);
 					break;
 				}
 				catch (Exception e)
@@ -322,292 +435,113 @@ public class Scheduling {
 		
 		return result;
 	}
-	private ArrayList<TourEvent> getMission(int freetime) throws SQLException,ClassNotFoundException, ParseException 
-	{
-		index = 0;
-		ArrayList<TourEvent> result = new ArrayList<TourEvent>();
-		TourEvent te;
-		
-		Calendar cal;
-		Date date = si.getStartTime();
-		cal = Calendar.getInstance();
-		cal.setTime(date);
-		
-		// 取得要先破關的行政區
-		List<String> region = QRegion("SELECT DISTINCT region FROM scheduling WHERE mission IS NOT NULL ORDER BY rand()");
-		String r = region.get(0);
 
-		// 亂數選行政區中A關卡
-		List<schedulingInfo> rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-				+ r
-				+ "' and"
-				+ " A.mission = 'A' and A.Place_Id = B.place_id and B.weekday = '"
-				+ weekday
-				+ "' and B."
-				+ date.getHours()
-				+ "_Oclock = 1 ORDER BY rand()");
+	private ArrayList<TourEvent> getOtherPOI(ArrayList<TourEvent> PlanResult,tourInfo ti) throws SQLException, ParseException {
+		//String start = PlanResult.get(index - 1).getPoiId();
 		
-		te = new TourEvent();
-		GeoPoint gpt = new GeoPoint();
-		//if ("".equals(rs.get(0).getPlaceID()) || rs.get(0).getPlaceID() == null) {
-		if (rs.size()==0) {
-			// 重新挑選行政區
-			region = QRegion("SELECT DISTINCT region FROM scheduling WHERE mission IS NOT NULL");
-			for (String s : region) {
-				r = s;
-				List<schedulingInfo> rs1 = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-						+ r
-						+ "' and"
-						+ " A.mission = 'A' and A.Place_Id = B.place_id and B.weekday = '"
-						+ weekday
-						+ "' and B."
-						+ date.getHours()
-						+ "_Oclock = 1 ORDER BY rand()");
-				if (rs1.size()>0) {
-					te.setPoiId(rs1.get(0).getPlaceID());
-					gpt.setLat(rs1.get(0).py);
-					gpt.setLng(rs1.get(0).px);
-					break;
-				}
-			}
-		
-			// 還是找不到->拿掉營業時間條件
-			if ("".equals(te.getPoiId()) || te.getPoiId() == null) {
-				region = QRegion("SELECT DISTINCT region FROM scheduling WHERE mission IS NOT NULL ORDER BY rand()");
-				r = region.get(0);
-		
-				List<schedulingInfo> rs1 = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-						+ r
-						+ "' and"
-						+ " A.mission = 'A' and A.Place_Id = B.place_id ORDER BY rand()");
-				te.setPoiId(rs1.get(0).getPlaceID());
-				gpt.setLat(rs1.get(0).py);
-				gpt.setLng(rs1.get(0).px);
-			}
-		} else {
-			te.setPoiId(rs.get(0).getPlaceID());
-			gpt.setLat(rs.get(0).py);
-			gpt.setLng(rs.get(0).px);
-		}
-		
-		// 取得user所在地與第一個景點的行車時間
-		double dis;
-		if ("".equals(si.getStartPoiId()) || si.getStartPoiId() == null) {
-			dis = Distance(gpt.getLat(), gpt.getLng(), si.getGps()
-					.getLat(), si.getGps().getLng());
-		} else {
-			List<GPS> gp = QGPS("SELECT px,py FROM scheduling WHERE place_id = '"
-					+ si.getStartPoiId() + "'");
-			if (gp.get(0).getX() == 0 || gp.get(0).getY() == 0)
-				dis = Distance(rs.get(0).getPy(), rs.get(0).getPx(), si
-						.getGps().getLng(), si.getGps().getLat());
-			else
-				dis = Distance(rs.get(0).getPy(), rs.get(0).getPx(), gp.get(0)
-						.getY(), gp.get(0).getX());
-		}
-		
-		int time = (int) (dis / 0.7);
-		te.setStartTime(addTime(sdf.parse(sdf.format(cal.getTime())), time));
-		te.setEndTime(addTime(te.getStartTime(), 30));
-		
-		result.add(index++, te);
-		repeat.add(te.getPoiId());
-		
-		// 亂數選行政區中B關卡 (營業時間依照上一個景點離開時間+1小時判斷)
-		int clock;
-		if ((result.get(index - 1).getEndTime().getHours() + 1)==24)
-			clock = 0;
-		else
-			clock = (result.get(index - 1).getEndTime().getHours() + 1);
-		
-		rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-				+ r
-				+ "' and A.mission = 'B' and "
-				+ "A.Place_Id = B.place_id and B.weekday = '"
-				+ weekday
-				+ "' and B."
-				+ (clock)
-				+ "_Oclock = 1 ORDER BY rand()");
-		//未符合條件(拿掉時間條件)
-		if (rs.size()==0)
-		{
-			rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-					+ r
-					+ "' and"
-					+ " A.mission = 'B' and A.Place_Id = B.place_id ORDER BY rand()");
-		}
-		te = new TourEvent();
-		te.setPoiId(rs.get(0).getPlaceID());
-		te.setStartTime(addTime(
-				result.get(index - 1).getEndTime(),
-				BetweenTime(result.get(index - 1).getPoiId(), rs.get(0)
-						.getPlaceID())));
-		te.setEndTime(addTime(te.getStartTime(), 30));
-		
-		result.add(index++, te);
-		repeat.add(te.getPoiId());
-		
-		if ((result.get(index - 1).getEndTime().getHours() + 1)==24)
-			clock = 0;
-		else
-			clock = (result.get(index - 1).getEndTime().getHours() + 1);
-		// 亂數選行政區中C關卡 (營業時間依照上一個景點離開時間+1小時判斷)
-		rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-				+ r
-				+ "' and A.mission = 'C' and "
-				+ "A.Place_Id = B.place_id and B.weekday = '"
-				+ weekday
-				+ "' and B."
-				+ (clock)
-				+ "_Oclock = 1 ORDER BY rand()");
-		if (rs.size()==0)
-		{
-			rs = Query("SELECT A.place_id,A.preference,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"
-					+ r
-					+ "' and"
-					+ " A.mission = 'C' and A.Place_Id = B.place_id ORDER BY rand()");
-		}
-		te = new TourEvent();
-		te.setPoiId(rs.get(0).getPlaceID());
-		te.setStartTime(addTime(
-				result.get(index - 1).getEndTime(),
-				BetweenTime(result.get(index - 1).getPoiId(), rs.get(0).getPlaceID())));
-		te.setEndTime(addTime(te.getStartTime(), 30));
-		
-		result.add(index++, te);
-		repeat.add(te.getPoiId());
-		return result;
-		
-	}
-	
-	private void getOtherPOI(int time) throws SQLException, ParseException {
-		String start = PlanResult.get(index - 1).getPoiId();
-		// ResultSet rs;
-
-		// rs =
-		// sc.select_table("SELECT A.place_id,stay_time,px,py FROM scheduling AS A,OpenTimeArray AS B WHERE A.region = '"+r+"' and A.mission = 'A' and A.stay_time < "+(freetime*20)+" and "
-		// + "A.Place_Id = B.place_id and B.weekday = '"+weekday
-		// +"' and B."+date.getHours()+"_Oclock = 1 ORDER BY rand()");
-		// rs.next();
-		//
-		// result
 		TourEvent te;
-		lastTime = time * 60;
+		int lastTime = ti.freeTime * 60;
 
 		while (true) {
 			//取得上一個景點後找出在有限時間內還可以去的景點
-			te = costTime(PlanResult.get(index - 1).getEndTime(), start,
-					si.getEndPoiId(), lastTime, 10000);
-			if ("".equals(te.getPoiId()) || te.getPoiId() == null) {
-				if (lastTime > 60) {
-					te = costTime(PlanResult.get(index - 1).getEndTime(),
-							start, si.getEndPoiId(), lastTime, 5000);
-					if ("".equals(te.getPoiId()) || te.getPoiId() == null) {
-						if (!repeat.contains(te.getPoiId())) {
-							if (!"".equals(si.getEndPoiId())
-									&& si.getEndPoiId() != null) {
-								te.setPoiId(si.getEndPoiId());
-								te.setStartTime(addTime(
-										PlanResult.get(index - 1).getEndTime(),
-										toDestination(PlanResult.get(index - 1)
-												.getPoiId(), si.getEndPoiId()) == 100000 ? 30
+			te = costTime(PlanResult, ti, lastTime, 10000);
+			if ("".equals(te.getPoiId()) || te.getPoiId() == null) //如果沒結果
+			{
+				if (lastTime > 30) //剩餘時間還大於半小時
+				{
+					te = costTime(PlanResult, ti, lastTime, 5000);
+					if ("".equals(te.getPoiId()) || te.getPoiId() == null) //還是找不到符合結果
+					{
+
+						if (!"".equals(ti.endPOI) && ti.endPOI != null) 
+						{
+							te.setPoiId(ti.endPOI);
+							te.setStartTime(addTime(PlanResult.get(ti.index - 1).getEndTime(),toDestination(PlanResult.get(ti.index - 1).getPoiId(), ti.endPOI) == 100000 ? 30
 												: toDestination(
-														PlanResult.get(
-																index - 1)
-																.getPoiId(), si
-																.getEndPoiId())));
-								te.setEndTime(si.getEndTime());
-								PlanResult.add(index++, te);
-								break;
-							}
+													PlanResult.get(ti.index - 1).getPoiId(), ti.endPOI)));
+							te.setEndTime(addTime(PlanResult.get(0).getStartTime(), ti.freeTime*60));
+							PlanResult.add(ti.index++, te);
+							break;
 						}
-						break;
 					} else {
-						PlanResult.add(index++, te);
-						start = te.getPoiId();
+						PlanResult.add(ti.index++, te);
+						ti.repeat.add(te.getPoiId());
+						lastTime = getLastTime(PlanResult,ti.freeTime * 60);
+						//start = te.getPoiId();
 						continue;
 					}
 				}
-				if (!repeat.contains(te.getPoiId())) {
-					if (!"".equals(si.getEndPoiId()) && si.getEndPoiId() != null) 
+				if (!ti.repeat.contains(te.getPoiId())) 
+				{
+					if (!"".equals(ti.endPOI) && ti.endPOI != null) 
 					{
-						te.setPoiId(si.getEndPoiId());
-						te.setStartTime(addTime(PlanResult.get(index - 1).getEndTime(),toDestination(PlanResult.get(index - 1).getPoiId(), si.getEndPoiId()) == 100000 ? 30
-										: toDestination(
-												PlanResult.get(index - 1)
-														.getPoiId(), si
-														.getEndPoiId())));
-						te.setEndTime(si.getEndTime());
-						PlanResult.add(index++, te);
-						break;
+						te.setPoiId(ti.endPOI);
+						te.setStartTime(addTime(PlanResult.get(ti.index - 1).getEndTime(),toDestination(PlanResult.get(ti.index - 1).getPoiId(),ti.endPOI) == 100000 ? 30
+										: toDestination(PlanResult.get(ti.index - 1).getPoiId(), ti.endPOI)));
+						te.setEndTime(ti.endTime);
+						PlanResult.add(ti.index++, te);
 					}
 				}
 				break;
 			} else {
-				PlanResult.add(index++, te);
-				start = te.getPoiId();
+				PlanResult.add(ti.index,te);
+				ti.repeat.add(te.getPoiId());
+				ti.index++;
+				lastTime = getLastTime(PlanResult,ti.freeTime * 60);
 			}
 
 		}
-
+		
+		return PlanResult;
 	}
-
-	private TourEvent costTime(Date startTime, String now, String destination,
-			int range, int checkin) throws SQLException, ParseException {
-		List<SchedulingDis> rs;
+	private int getLastTime(ArrayList<TourEvent> PlanResult,int freetime)
+	{
+		int time = FreeTime_minute(PlanResult.get(0).getStartTime(),PlanResult.get(PlanResult.size()-1).getEndTime());
+		
+		return freetime - time;
+	}
+	private TourEvent costTime(ArrayList<TourEvent> PlanResult,tourInfo ti,int lastTime,int checkin) throws SQLException, ParseException {
 		int destinationTime;
 		TourEvent te = new TourEvent();
-		rs = QueryDis("SELECT A.arrival_id, A.checkins, A.preference, A.time, (A.time + A.stay_time) AS totaltime FROM "
+
+		List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT A.arrival_id, A.time, (A.time + A.stay_time) AS totaltime FROM "
 				+ "OpenTimeArray AS B, euclid_distance AS A WHERE A.Id = '"
-				+ now
+				+ PlanResult.get(ti.index-1).getPoiId()
 				+ "' AND ("
-				+ preference
+				+ ti.preference
 				+ ") AND "
-				+ "("+city+") AND "
+				+ "("+ti.city+") AND "
 				+ "B.Place_Id = A.arrival_id AND (A.time + A.stay_time) < "
-				+ range
+				+ lastTime
 				+ " AND A.checkins > "
 				+ checkin
 				+ " AND B.weekday = '"
-				+ weekday
+				+ ti.weekday
 				+ "' "
 				+ "AND B."
-				+ startTime.getHours()
+				+ PlanResult.get(ti.index-1).getEndTime().getHours()
 				+ "_Oclock = 1 ORDER BY RAND() DESC");
-		for (SchedulingDis sd : rs) // 找出目前所在景點可考慮去的鄰近景點候選清單
+		
+		
+		
+		for (Map<String, Object> i : rs) // 找出目前所在景點可考慮去的鄰近景點候選清單
 		{
-//			//非用餐時段暫時不推餐廳
-//			if (!(startTime.getHours() >= 11 && startTime.getHours() <= 13)
-//					&& !(startTime.getHours() >= 17 && startTime.getHours() <= 19)) {
-//				if (sd.getPreference().equals("PF1"))
-//					continue;
-//			}
 			//沒有目的地
-			if ("".equals(destination) || destination == null) {
-				if (!repeat.contains(sd.getPlaceID())
-						&& (sd.getTotalTime()) < lastTime) // 達成任務就離開
+			if ("".equals(ti.endPOI) || ti.endPOI == null) {
+				if (!ti.repeat.contains(i.get("arrival_id").toString()) && ((double)i.get("totaltime")) < lastTime) // 達成任務就離開
 				{
-					te.setPoiId(sd.getPlaceID());
-					te.setStartTime(addTime(PlanResult.get(index - 1)
-							.getEndTime(), sd.getTime()));
-					te.setEndTime(addTime(PlanResult.get(index - 1)
-							.getEndTime(), sd.getTotalTime()));
-					repeat.add(sd.getPlaceID());
-					lastTime -= sd.getTotalTime();
+					te.setPoiId(i.get("arrival_id").toString());
+					te.setStartTime(addTime(PlanResult.get(ti.index-1).getEndTime(), (double)i.get("time")));
+					te.setEndTime(addTime(PlanResult.get(ti.index-1).getEndTime(), (double)i.get("totaltime")));
 					break;
 				}
 			} else {
-				destinationTime = toDestination(sd.getPlaceID(), destination);
-				if (!repeat.contains(sd.getPlaceID())
-						&& (destinationTime + sd.getTotalTime()) < lastTime) // 達成任務就離開
+				destinationTime = toDestination(i.get("arrival_id").toString(), ti.endPOI);
+				if (!ti.repeat.contains(i.get("arrival_id").toString()) && (destinationTime + (double)i.get("totaltime")) < lastTime) // 達成任務就離開
 				{
-					te.setPoiId(sd.getPlaceID());
-					te.setStartTime(addTime(PlanResult.get(index - 1)
-							.getEndTime(), sd.getTime()));
-					te.setEndTime(addTime(PlanResult.get(index - 1)
-							.getEndTime(), sd.getTotalTime()));
-					repeat.add(sd.getPlaceID());
-					lastTime -= sd.getTotalTime();
+					te.setPoiId(i.get("arrival_id").toString());
+					te.setStartTime(addTime(PlanResult.get(ti.index-1).getEndTime(), (double)i.get("time")));
+					te.setEndTime(addTime(PlanResult.get(ti.index-1).getEndTime(), (double)i.get("totaltime")));
 					break;
 				}
 			}
@@ -617,15 +551,16 @@ public class Scheduling {
 		return te;
 	}
 
-	private int toDestination(String now, String destination)
-			throws SQLException {
-		List<SchedulingDis> rs = QueryDis("SELECT A.arrival_id,A.preference,checkins,time,(time+stay_time) AS totalTime FROM euclid_distance AS A WHERE id = '"
+	private int toDestination(String now, String destination) throws SQLException {
+		
+		List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT (time+stay_time) AS totalTime FROM euclid_distance AS A WHERE id = '"
 				+ now + "' and arrival_id = '" + destination + "'");
-		System.out
-				.println("SELECT (time+stay_time) AS totalTime FROM euclid_distance AS A WHERE id = '"
-						+ now + "' and arrival_id = '" + destination + "'");
+		
 		if (rs.size() > 0)
-			return rs.get(0).getTotalTime();
+		{
+			int result = (int)(double)rs.get(0).get("totalTime");
+			return result;
+		}
 		else {
 			return 100000;
 		}
@@ -656,11 +591,11 @@ public class Scheduling {
 		}
 	}
 
-	private Date addTime(Date d, int minute) throws ParseException {
+	private Date addTime(Date d, double minute) throws ParseException {
 		Calendar cal;
 		cal = Calendar.getInstance();
 		cal.setTime(d);
-		cal.add(Calendar.MINUTE, minute);
+		cal.add(Calendar.MINUTE, (int)minute);
 		return sdf.parse(sdf.format(cal.getTime()));
 	}
 
@@ -676,7 +611,14 @@ public class Scheduling {
 		out = Math.hypot(x, y);
 		return out / 1000;
 	}
-
+	private int FreeTime_minute(Date start, Date end) {
+		Date d1 = start;
+		Date d2 = end;
+		long diff = d2.getTime() - d1.getTime();
+		long diffHours = (diff / (60 * 1000)) + (diff % (60 * 1000));
+		return (int) diffHours;
+	}
+	
 	private int FreeTime(Date start, Date end) {
 		Date d1 = start;
 		Date d2 = end;
@@ -685,15 +627,6 @@ public class Scheduling {
 		return (int) diffHours;
 	}
 
-	private void close() {
-		PlanResult.clear();
-		repeat.clear();
-		lastTime = 0;
-		index = 0;
-		preference = "";
-		weekday = "";
-		city = "";
-	}
 	private static List<Map.Entry<String, Integer>> sort(HashMap<String,Integer> a)
 	{
 		List<Map.Entry<String, Integer>> list_Data = new ArrayList<Map.Entry<String, Integer>>(a.entrySet());
@@ -734,21 +667,6 @@ public class Scheduling {
 
 	/**SQL Query*/
 
-	private List<schedulingInfo> Query(String q) {
-		List<schedulingInfo> results = jdbcTemplate.query(q,
-				new RowMapper<schedulingInfo>() {
-					@Override
-					public schedulingInfo mapRow(ResultSet rs, int rowNum)
-							throws SQLException {
-						return new schedulingInfo(rs.getString("A.place_id"),
-								rs.getString("A.preference"), rs
-										.getInt("stay_time"), rs
-										.getDouble("px"), rs.getDouble("py"));
-					}
-				});
-		return results;
-
-	}
 	private List<GPS> QGPS(String q) {
 		List<GPS> results = jdbcTemplate.query(q, new RowMapper<GPS>() {
 			@Override
@@ -759,21 +677,18 @@ public class Scheduling {
 		return results;
 
 	}
-	private List<SchedulingDis> QueryDis(String q) {
-		List<SchedulingDis> results = jdbcTemplate.query(q,
-				new RowMapper<SchedulingDis>() {
-					@Override
-					public SchedulingDis mapRow(ResultSet rs, int rowNum)
-							throws SQLException {
-						return new SchedulingDis(rs.getString("A.arrival_id"),
-								rs.getString("A.preference"), rs
-										.getInt("checkins"), rs.getInt("time"),
-								rs.getInt("totalTime"));
-					}
-				});
+
+	private List<String> placeName(String q) {
+		List<String> results = stJdbcTemplate.query(q, new RowMapper<String>() {
+			@Override
+			public String mapRow(ResultSet rs, int rowNum) throws SQLException {
+				return rs.getString("name");
+			}
+		});
 		return results;
 
 	}
+	
 	private List<String> QRegion(String q) {
 		List<String> results = jdbcTemplate.query(q, new RowMapper<String>() {
 			@Override
@@ -798,107 +713,31 @@ public class Scheduling {
 	
 	
 	/**SQL Model*/
-	private class schedulingInfo {
-		double px;
-
-		double py;
-
-		int stayTime;
-
-		String place_id;
-
+	
+	
+	private class tourInfo
+	{
+		Date startTime,endTime;
+		int index;
+		int freeTime;
+		double px,py;
+		String weekday;
 		String preference;
-
-		public schedulingInfo(String id, String p, int time, double x, double y) {
-			super();
-			this.place_id = id;
-			this.preference = p;
-			this.stayTime = time;
+		String city;
+		String startPOI,endPOI;
+		ArrayList<String> repeat = new ArrayList<String>();
+		boolean flag;
+		private tourInfo(int i,int free,Date d,Date e,double x,double y)
+		{
+			this.startTime = d;
+			this.endTime = e;
+			this.index = i;
+			this.freeTime = free;
 			this.px = x;
 			this.py = y;
 		}
-
-		public String getPlaceID() {
-			return place_id;
-		}
-
-		public String getPreference() {
-			return preference;
-		}
-
-		public int getStayTime() {
-			return stayTime;
-		}
-
-		public double getPx() {
-			return px;
-		}
-
-		public double getPy() {
-			return py;
-		}
-
 	}
-	private class SchedulingDis {
-		String place_id;
-		String preference;
-		int checkins;
-		int time;
-		int totalTime;
-
-		public SchedulingDis(String id, String p, int check, int time, int total) {
-			super();
-			this.place_id = id;
-			this.preference = p;
-			this.checkins = time;
-			this.time = time;
-			this.totalTime = total;
-		}
-
-		public SchedulingDis() {
-			super();
-		}
-
-		public String getPlaceID() {
-			return place_id;
-		}
-
-		public void setPlaceID(String id) {
-			this.place_id = id;
-		}
-
-		public String getPreference() {
-			return preference;
-		}
-
-		public void setPreference(String p) {
-			this.preference = p;
-		}
-
-		public int getTime() {
-			return time;
-		}
-
-		public void setTime(int time) {
-			this.time = time;
-		}
-
-		public int getCheckins() {
-			return checkins;
-		}
-
-		public void setCheckins(int check) {
-			this.checkins = check;
-		}
-
-		public int getTotalTime() {
-			return totalTime;
-		}
-
-		public void setTotalTime(int time) {
-			this.totalTime = time;
-		}
-	}
+	
 	private class GPS {
 		double px, py;
 
