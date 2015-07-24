@@ -168,7 +168,7 @@ public class Scheduling {
 	{
 		String city="";
 		//將city寫入條件
-		for (int i = 1; i < c.size() - 1; i++)
+		for (int i = 0; i < c.size() - 1; i++)
 			city += "A.county = '"+c.get(i)+"' or ";
 		city += "A.county = '"+c.get(c.size()-1)+"'";
 		return city;
@@ -240,10 +240,16 @@ public class Scheduling {
 			
 		}
 
-		//當上面無結果時，則解放行車時間的條件
+		//當上面無結果時，則解放行車時間、打卡數的條件
 		if (result.size()==0)
 		{
-				
+			rs = jdbcTemplate.queryForList("SELECT A.place_id,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and B.weekday = '"
+						+ ti.weekday
+						+ "' and "
+						+ date.getHours()
+						+ "_Oclock = 1 and ("
+						+ ti.preference + ") and ("
+						+ ""+ti.city+") and (px IS not null and px <> 0) and (py IS not null and py <>0) GROUP BY fb_id ORDER BY rand() limit 0,40");
 			HashMap<String,Integer> tmp = new HashMap<String,Integer>();
 			HashMap<String,TourEvent> _tmp = new HashMap<String,TourEvent>();
 			for (Map<String, Object> i : rs)
