@@ -1,6 +1,3 @@
-/**
- * @author sharonyhwu
- */
 package tw.org.iii.st.analytics.controller;
 
 
