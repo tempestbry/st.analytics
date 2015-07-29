@@ -268,11 +268,11 @@ public class Scheduling {
 				int time = (int) (dis / 0.7);
 				
 				te = new TourEvent();
-				te.setPoiId(i.get("A.place_id").toString());
+				te.setPoiId(i.get("place_id").toString());
 				te.setStartTime(addTime(cal.getTime(),time));
 				te.setEndTime(addTime(te.getStartTime(), (int)i.get("stay_Time")));
-				_tmp.put(i.get("A.place_id").toString(), te);
-				tmp.put(i.get("A.place_id").toString(), time);
+				_tmp.put(i.get("place_id").toString(), te);
+				tmp.put(i.get("place_id").toString(), time);
 			}
 			//找最近可到的景點作為起始點
 			List<Map.Entry<String, Integer>> rank = sort(tmp);
