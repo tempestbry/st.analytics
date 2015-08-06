@@ -30,6 +30,8 @@ import org.springframework.jdbc.core.RowMapper;
 
 
 
+
+
 import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.RecommendInfo;
 import tw.org.iii.model.RecommendInput;
@@ -40,7 +42,13 @@ public class Recommendation {
 	@Autowired
 	@Qualifier("hualienJdbcTempplate")
 	JdbcTemplate jdbcTemplate;
+	
+	@Autowired
+	@Qualifier("stJdbcTemplate")
+	private JdbcTemplate stJdbcTemplate;
 
+//	@Qualifier("analyticsJdbcTempplate")
+//	JdbcTemplate analyticsjdbc;
 	//test
 	
 //	@RequestMapping("/ThisTime")
@@ -76,77 +84,149 @@ public class Recommendation {
 		String result[] = new String[5];
 		
 		String pid = json.getPoiId();
-		if ("".equals(pid) || pid == null)
+		if ("".equals(pid) || pid == null) //主頁的猜你喜歡
 		{
-			timeInfo ti = getWeekday();
-			//String spl[] = json.getGps().split(",");
-			result = FindBestPOI(ti, json.getGps().getLng(), json.getGps().getLat());
-			return result;
+			//花東場域
+			if (json.getCountyId().contains("TW18") && json.getCountyId().contains("TW19"))
+			{
+				timeInfo ti = getWeekday();
+				//String spl[] = json.getGps().split(",");
+				result = FindBestPOI(ti, json.getGps().getLng(), json.getGps().getLat());
+				return result;
+			}
+			else //智慧觀光平台的
+			{
+				result = FinStBestPOI(json.getGps().getLng(), json.getGps().getLat());
+				return result;
+			}
+	
 		}
 		else
 		{
-			List<String> c = json.getCountyId();
-			String countyList = "";
-			for (int i=0;i<c.size()-1;i++)
-				countyList += "place_county = '"+c.get(i)+"' or ";
-			countyList += "place_county = '"+c.get(c.size()-1)+"'";
-			List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
-					+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county and ("+countyList+") and type = '"+json.getReturnType()+"' ORDER BY total DESC LIMIT 0,5");
-			int i=0;
-			
-			for (RecommendInfo ri : sqlresult) 
+			//花東場域
+			if (json.getCountyId().contains("TW18") && json.getCountyId().contains("TW19"))
 			{
-				result[i++] = ri.getRecommendID();
-			}
-			
-			//沒有結果時, 則挑top進行推薦
-			if (result[4]==null)
-			{
-				HashMap<String,defaultResult> tmp = new HashMap<String,defaultResult>();
-				List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and id = '"+pid+"'");
-				List<place_info> sql1 = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_name");
-				for (place_info s : sql) 
+				List<String> c = json.getCountyId();
+				String countyList = "";
+				for (int i=0;i<c.size()-1;i++)
+					countyList += "place_county = '"+c.get(i)+"' or ";
+				countyList += "place_county = '"+c.get(c.size()-1)+"'";
+				List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
+						+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county and ("+countyList+") and type = '"+json.getReturnType()+"' ORDER BY total DESC LIMIT 0,5");
+				int i=0;
+				
+				for (RecommendInfo ri : sqlresult) 
 				{
-					double latitude = 0,latitude_tmp;
-					double longitude = 0,longitude_tmp;
-					String[] location = s.gps.split("\\(|\\)| "),location_tmp;
-
-					longitude = Double.parseDouble(location[2]);
-					latitude = Double.parseDouble(location[1]);
-
-					for (place_info s1 : sql1) 
+					result[i++] = ri.getRecommendID();
+				}
+				
+				//沒有結果時, 則挑top進行推薦
+				if (result[4]==null)
+				{
+					HashMap<String,defaultResult> tmp = new HashMap<String,defaultResult>();
+					List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and id = '"+pid+"'");
+					List<place_info> sql1 = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_name");
+					for (place_info s : sql) 
 					{
-						defaultResult d = new defaultResult();
-						location_tmp = s1.gps.split("\\(|\\)| ");
-						longitude_tmp = Double.parseDouble(location_tmp[2]);
-						latitude_tmp = Double.parseDouble(location_tmp[1]);
-						d.distance = Distance(longitude,latitude,longitude_tmp,latitude_tmp);
-						d.checkins = s1.checkins;
-						tmp.put(s1.id, d);
+						double latitude = 0,latitude_tmp;
+						double longitude = 0,longitude_tmp;
+						String[] location = s.gps.split("\\(|\\)| "),location_tmp;
+
+						longitude = Double.parseDouble(location[2]);
+						latitude = Double.parseDouble(location[1]);
+
+						for (place_info s1 : sql1) 
+						{
+							defaultResult d = new defaultResult();
+							location_tmp = s1.gps.split("\\(|\\)| ");
+							longitude_tmp = Double.parseDouble(location_tmp[2]);
+							latitude_tmp = Double.parseDouble(location_tmp[1]);
+							d.distance = Distance(longitude,latitude,longitude_tmp,latitude_tmp);
+							d.checkins = s1.checkins;
+							tmp.put(s1.id, d);
+						}
+					}
+					List<Map.Entry<String, Integer>> sortresult = locationsort(tmp);
+					
+					for (Map.Entry<String, Integer> entry:sortresult) 
+				    {
+						result[i++] =entry.getKey();
+						if (i==5)
+							break;
+				    }		
+					
+				}
+				
+				if (i<5) //最後確認
+				{
+					
+					List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" ORDER BY checkins");
+					for (place_info s : sql) 
+				    {
+						result[i++] = s.id;
+						if (i==5)
+							break;
 					}
 				}
-				List<Map.Entry<String, Integer>> sortresult = locationsort(tmp);
+			}
+			else //智慧觀光場域
+			{
+//				ArrayList<String> tmp = new ArrayList<String>();
+//				int i=0;
+//				List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT related_id FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and cb > 0 ORDER BY cb DESC limit 0,10");
+//				for (Map<String, Object> r : rs) 
+//					tmp.add(r.get("related_id").toString());
+//				long seed = System.nanoTime();
+//				Collections.shuffle(tmp, new Random(seed));
+//				for (String t : tmp) 
+//			    {
+//					result[i++] = t;
+//					if (i==5)
+//						break;
+//				}
 				
-				for (Map.Entry<String, Integer> entry:sortresult) 
-			    {
-					result[i++] =entry.getKey();
-					if (i==5)
-						break;
-			    }		
+				normalize n = new normalize();
+				double cb,ar,checkins;
+				HashMap<String,info> record = new HashMap<String,info>();
+				List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"'");
+				boolean flag = true;
+				for (Map<String, Object> r : rs) 
+				{
+					cb = Double.parseDouble(r.get("cb")+"");
+					ar = Double.parseDouble(r.get("ar")+"");
+					checkins = Double.parseDouble(r.get("top")+"");
+					info i = new info(cb,ar,checkins);
+					record.put(r.get("related_id").toString(), i);
+					if (flag)
+					{
+						n.cbMax = cb;
+						n.cbMin = cb;
+						n.arMax = ar;
+						n.arMin = ar;
+						n.checkinsMax = checkins;
+						n.checkinsMin = checkins;
+						flag = false;
+					}
+					if (cb > n.cbMax)
+						n.cbMax = cb;
+					if (cb < n.cbMin)
+						n.cbMin = cb;
+					if (ar > n.arMax)
+						n.arMax = ar;
+					if (ar < n.arMin)
+						n.arMin = ar;
+					if (checkins > n.checkinsMax)
+						n.checkinsMax = checkins;
+					if (checkins < n.checkinsMin)
+						n.checkinsMin = checkins;
+				}
+				n.cbValue = n.cbMax - n.cbMin;
+				n.arValue = n.arMax - n.arMin;
+				n.checkinsValue = n.checkinsMax - n.checkinsMin;
+				result = integrated(record,n);
 				
 			}
 			
-			if (i<5) //最後確認
-			{
-				
-				List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" ORDER BY checkins");
-				for (place_info s : sql) 
-			    {
-					result[i++] = s.id;
-					if (i==5)
-						break;
-				}
-			}
 			
 		}
 		
@@ -154,11 +234,109 @@ public class Recommendation {
 		return result;
       
 	}
+	private String[] integrated(HashMap<String,info> record,normalize n)
+	{
+		double cb,ar,ch;
+		HashMap<String,Double> tmp = new HashMap<String,Double>();
+		for (String r : record.keySet())
+		{
+			info i = record.get(r);
+			if ((i.cb - n.cbMin)==0 || n.cbValue==0)
+				cb = 0;
+			else
+				cb = ((i.cb - n.cbMin) / n.cbValue);
+			if ((i.ar - n.arMin)==0 || n.arValue==0)
+				ar = 0;
+			else
+				ar = ((i.ar - n.arMin) / n.arValue);
+			if ((i.checkins - n.checkinsMin)==0 || n.checkinsValue==0)
+				ch = 0;
+			else
+				ch = ((i.checkins - n.checkinsMin) / n.checkinsValue);
+			
+			tmp.put(r, 0.5*cb + 0.2*ar + 0.3*ch);
+		}
+		
+		List<Map.Entry<String, Integer>> rank = sortDouble(tmp);
+		String result[] = new String[5];
+		int j = 0;
+		for (Map.Entry<String, Integer> entry:rank) 
+	    {
+			result[j++] = entry.getKey();
+			if (j==5)
+				break;
+	    }
+		return result;
+	}
+	private List<Map.Entry<String, Integer>> sortDouble(HashMap<String,Double> a)
+	{
+		HashMap<String,Integer> tmp = new HashMap<String,Integer>();
+		for (String aa : a.keySet())
+			tmp.put(aa, (int)(a.get(aa) * 100000));
+		List<Map.Entry<String, Integer>> list_Data = new ArrayList<Map.Entry<String, Integer>>(tmp.entrySet());
+
+		Collections.sort(list_Data, new Comparator<Map.Entry<String, Integer>>()
+		{
+            public int compare(Map.Entry<String, Integer> entry1,
+                               Map.Entry<String, Integer> entry2){
+                return (entry2.getValue() - entry1.getValue());
+            }
+        });
+		
+		return list_Data;
+	}
+	private class normalize
+	{
+		double cbMax=0,cbMin=0;
+		double arMax=0,arMin=0;
+		double checkinsMax=0,checkinsMin=0;		
+		
+		double cbValue,arValue,checkinsValue;
+		
+	}
+	private class info
+	{
+		private info(double c,double a,double ch)
+		{
+			this.cb = c;
+			this.ar = a;
+			this.checkins =ch;
+		}
+		double cb,ar,checkins;
+	}
+	
 	private class defaultResult
 	{
 		double distance;
 		int checkins;
 	}
+	private String askGoogle_all(double px,double py) throws IOException
+	{
+		HashMap<String,String> county = new HashMap<String,String>();
+		List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT id,name FROM County");
+		for (Map<String, Object> i : rs) 
+			county.put(i.get("name").toString().replace("臺", "台"), i.get("id").toString());
+		
+		String html = request("http://maps.google.com/maps/api/geocode/json?latlng="+py+","+px+"&language=zh-TW&sensor=true","UTF-8");
+		
+		Pattern p = Pattern.compile("\"long_name\" : \".{2}[縣市]\","); 
+		Matcher m = p.matcher(html);
+		
+		String city="";
+		if (m.find())
+		{
+			city = Parser(m.group(),"\"long_name\" : \"","\",",1);
+			if (!county.containsKey(city))
+				return "all";
+			else
+				return county.get(city);
+		}
+		else
+		{
+			return "all";
+		}
+	}
+	
 	private boolean askGoogle(double px,double py) throws IOException
 	{
 		String county[] = {"台東","花蓮","宜蘭"};
@@ -219,7 +397,7 @@ public class Recommendation {
 
 	}
 	
-	private  String request(String url,String type) throws IOException
+	private String request(String url,String type) throws IOException
 	{
 		StringBuilder results = new StringBuilder();
 		try
@@ -249,7 +427,24 @@ public class Recommendation {
 		
 	}
 	
-	
+	private String[] FinStBestPOI(double px,double py) throws IOException
+	{
+		String city = askGoogle_all(px,py);
+		ArrayList<String> result = new ArrayList<String>();
+		if (city.equals("all")) //全部縣市隨機Top推薦
+		{
+			List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and checkins > 50000 GROUP BY fb_id ORDER by rand() limit 0,5");
+			for (Map<String, Object> i : rs)
+				result.add(i.get("id").toString());
+		}
+		else //指定縣市的Top景點推薦
+		{
+			List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and countyId = '"+city+"' and checkins > 30000 GROUP BY fb_id ORDER by rand() limit 0,5");
+			for (Map<String, Object> i : rs)
+				result.add(i.get("id").toString());
+		}
+		return result.toArray(new String[result.size()]);
+	}
 	private String[] FindBestPOI(timeInfo ti,double px,double py) throws SQLException, ClassNotFoundException, IOException
 	{
 		
@@ -382,7 +577,7 @@ public class Recommendation {
 		
 	}
 	
-	private static List<Map.Entry<String, Integer>> locationsort(HashMap<String,defaultResult> a)
+	private List<Map.Entry<String, Integer>> locationsort(HashMap<String,defaultResult> a)
 	{
 		HashMap<String,Integer> tmp = new HashMap<String,Integer>();
 		for (String s : a.keySet())
@@ -409,7 +604,7 @@ public class Recommendation {
 		return list_Data;
 	}
 	
-	private static List<Map.Entry<String, Integer>> sort(HashMap<String,Integer> a)
+	private List<Map.Entry<String, Integer>> sort(HashMap<String,Integer> a)
 	{
 		List<Map.Entry<String, Integer>> list_Data = new ArrayList<Map.Entry<String, Integer>>(a.entrySet());
 

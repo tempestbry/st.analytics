@@ -80,6 +80,31 @@ public class Application extends SpringBootServletInitializer {
 		return dataSource;
 	}
 	
+//	@Bean(name = "datasourceAnalytics")
+//	@Primary
+//	public ComboPooledDataSource dataSourceAnalytics() throws PropertyVetoException {
+//		ComboPooledDataSource dataSource = new ComboPooledDataSource();
+//		dataSource.setDriverClass(environment
+//				.getRequiredProperty("c3p0.driver"));
+//		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.analytics"));
+//		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
+//		dataSource
+//				.setPassword(environment.getRequiredProperty("c3p0.password"));
+//		dataSource.setInitialPoolSize(environment.getRequiredProperty(
+//				"c3p0.initialPoolSize", Integer.class));
+//		dataSource.setMaxPoolSize(environment.getRequiredProperty(
+//				"c3p0.maxPoolSize", Integer.class));
+//		dataSource.setMinPoolSize(environment.getRequiredProperty(
+//				"c3p0.minPoolSize", Integer.class));
+//		dataSource.setAcquireIncrement(environment.getRequiredProperty(
+//				"c3p0.acquireIncrement", Integer.class));
+//		dataSource.setMaxStatements(environment.getRequiredProperty(
+//				"c3p0.maxStatements", Integer.class));
+//		dataSource.setMaxIdleTime(environment.getRequiredProperty(
+//				"c3p0.maxIdleTime", Integer.class));
+//		return dataSource;
+//	}
+	
 	
 	@Bean(name="stJdbcTemplate") 
 	public JdbcTemplate stJdbcTemplate() throws PropertyVetoException{
@@ -91,6 +116,10 @@ public class Application extends SpringBootServletInitializer {
 	public JdbcTemplate hualienJdbcTempplate() throws PropertyVetoException{
 		return  new JdbcTemplate(dataSourceHualien());
 	}
+//	@Bean(name="analyticsJdbcTempplate")
+//	public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
+//		return  new JdbcTemplate(dataSourceAnalytics());
+//	}
 	
 	@Bean
 	public JobDetailFactoryBean jobDetailFactoryBean() throws PropertyVetoException{
@@ -100,6 +129,7 @@ public class Application extends SpringBootServletInitializer {
 		Map<String, Object> map = new HashMap();
 		map.put("stJdbcTemplate", stJdbcTemplate());
 		map.put("datasource", hualienJdbcTempplate());		
+		//map.put("datasourceAnalytics", analyticsJdbcTempplate());		
 		jobbean.setJobDataAsMap(map);
 		return jobbean;
 	}
