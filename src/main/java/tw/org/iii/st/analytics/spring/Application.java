@@ -115,10 +115,10 @@ public class Application extends SpringBootServletInitializer {
 	public JdbcTemplate hualienJdbcTempplate() throws PropertyVetoException{
 		return  new JdbcTemplate(dataSourceHualien());
 	}
-//	@Bean(name="analyticsJdbcTempplate")
-//	public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
-//		return  new JdbcTemplate(dataSourceAnalytics());
-//	}
+	@Bean(name="analyticsJdbcTemplate")
+	public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
+		return  new JdbcTemplate(dataSourceAnalytics());
+	}
 	
 	@Bean
 	public JobDetailFactoryBean jobDetailFactoryBean() throws PropertyVetoException{

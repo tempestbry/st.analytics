@@ -22,5 +22,13 @@ public class GeoPoint {
 		this.lng = lng;
 	}
 	
+	//ADD constructor
+	public GeoPoint() {
+		super();
+	}
 	
+	public GeoPoint(double lat, double lng) {
+		setLat(lat);
+		setLng(lng);
+	}
 }
