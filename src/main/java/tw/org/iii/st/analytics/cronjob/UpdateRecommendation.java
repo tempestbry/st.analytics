@@ -1,12 +1,8 @@
 package tw.org.iii.st.analytics.cronjob;
 
-import java.util.List;
-import java.util.Map;
-
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.scheduling.quartz.QuartzJobBean;
 
 /**

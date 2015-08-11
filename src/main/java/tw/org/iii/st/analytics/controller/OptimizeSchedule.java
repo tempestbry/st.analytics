@@ -1,5 +1,16 @@
 package tw.org.iii.st.analytics.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.web.bind.annotation.*;
+import tw.org.iii.model.GeoPoint;
+import tw.org.iii.model.OptimizeInput;
+import tw.org.iii.model.Poi;
+import tw.org.iii.model.TourEvent;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
@@ -8,22 +19,6 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.bind.annotation.RestController;
-
-import tw.org.iii.model.GeoPoint;
-import tw.org.iii.model.OptimizeInput;
-import tw.org.iii.model.Poi;
-import tw.org.iii.model.TourEvent;
 
 @RestController
 @RequestMapping("/OptimizeSchedule")
