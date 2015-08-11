@@ -12,10 +12,10 @@ public class OptimzeInput {
 	private Date startTime;	
 	private Date endTime;
 	
+	private GeoPoint gps; 
 	/*
 	private List<String> cityList = new ArrayList<String>();
 	private List<String> preferenceList = new ArrayList<String>();
-	private GeoPoint gps;
 	private String startPoiId;
 	private String endPoiId;
 	private boolean shake;
