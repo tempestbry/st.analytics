@@ -21,14 +21,14 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import tw.org.iii.model.GeoPoint;
-import tw.org.iii.model.OptimzeInput;
+import tw.org.iii.model.OptimizeInput;
 import tw.org.iii.model.Poi;
 import tw.org.iii.model.TourEvent;
 
 @RestController
-@RequestMapping("/OptimzeSchedule")
-public class OptimzeSchedule {
-	private OptimzeInput oi;
+@RequestMapping("/OptimizeSchedule")
+public class OptimizeSchedule {
+	private OptimizeInput oi;
 
 	@Autowired
 	@Qualifier("hualienJdbcTempplate")
@@ -47,7 +47,7 @@ public class OptimzeSchedule {
 	private static double MAGIC_NUM_DRIVESPEED = 60;
 
 	@RequestMapping(value="/Optimize", method = RequestMethod.POST)
-	public @ResponseBody List<TourEvent> optimize(@RequestBody OptimzeInput aOptimzeInput) throws ParseException {
+	public @ResponseBody List<TourEvent> optimize(@RequestBody OptimizeInput aOptimzeInput) throws ParseException {
 		//result
 		ArrayList<TourEvent> optimizeSchedule = new ArrayList<TourEvent>();
 

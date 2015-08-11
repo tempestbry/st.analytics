@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-public class OptimzeInput {
+public class OptimizeInput {
 	//private List<String> mustPoiList = new ArrayList<String>();
 	private List<Poi> mustPoiList = new ArrayList<Poi>();
 	private OptimizeOptions optimizeCondition = new OptimizeOptions();
