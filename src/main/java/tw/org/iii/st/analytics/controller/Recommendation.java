@@ -41,14 +41,15 @@ import tw.org.iii.model.RecommendInput;
 public class Recommendation {
 	@Autowired
 	@Qualifier("hualienJdbcTempplate")
-	JdbcTemplate jdbcTemplate;
+	private JdbcTemplate jdbcTemplate;
 	
 	@Autowired
 	@Qualifier("stJdbcTemplate")
 	private JdbcTemplate stJdbcTemplate;
 
-//	@Qualifier("analyticsJdbcTempplate")
-//	JdbcTemplate analyticsjdbc;
+	@Autowired
+	@Qualifier("analyticsJdbcTemplate")
+	private JdbcTemplate analyticsjdbc;
 	//test
 	
 //	@RequestMapping("/ThisTime")
@@ -173,7 +174,7 @@ public class Recommendation {
 			{
 //				ArrayList<String> tmp = new ArrayList<String>();
 //				int i=0;
-//				List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT related_id FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and cb > 0 ORDER BY cb DESC limit 0,10");
+//				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and cb > 0 ORDER BY cb DESC limit 0,10");
 //				for (Map<String, Object> r : rs) 
 //					tmp.add(r.get("related_id").toString());
 //				long seed = System.nanoTime();
@@ -188,7 +189,7 @@ public class Recommendation {
 				normalize n = new normalize();
 				double cb,ar,checkins;
 				HashMap<String,info> record = new HashMap<String,info>();
-				List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"'");
+				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"'");
 				boolean flag = true;
 				for (Map<String, Object> r : rs) 
 				{
@@ -433,13 +434,13 @@ public class Recommendation {
 		ArrayList<String> result = new ArrayList<String>();
 		if (city.equals("all")) //全部縣市隨機Top推薦
 		{
-			List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and checkins > 50000 GROUP BY fb_id ORDER by rand() limit 0,5");
+			List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and checkins > 50000 GROUP BY fb_id ORDER by rand() limit 0,5");
 			for (Map<String, Object> i : rs)
 				result.add(i.get("id").toString());
 		}
 		else //指定縣市的Top景點推薦
 		{
-			List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and countyId = '"+city+"' and checkins > 30000 GROUP BY fb_id ORDER by rand() limit 0,5");
+			List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and countyId = '"+city+"' and checkins > 30000 GROUP BY fb_id ORDER by rand() limit 0,5");
 			for (Map<String, Object> i : rs)
 				result.add(i.get("id").toString());
 		}

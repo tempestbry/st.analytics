@@ -79,13 +79,12 @@ public class Application extends SpringBootServletInitializer {
 				"c3p0.maxIdleTime", Integer.class));
 		return dataSource;
 	}
-	
 	@Bean(name = "datasourceAnalytics")
 	public ComboPooledDataSource dataSourceAnalytics() throws PropertyVetoException {
 		ComboPooledDataSource dataSource = new ComboPooledDataSource();
 		dataSource.setDriverClass(environment
 				.getRequiredProperty("c3p0.driver"));
-		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.analytics"));
+		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.st"));
 		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
 		dataSource
 				.setPassword(environment.getRequiredProperty("c3p0.password"));
@@ -115,10 +114,11 @@ public class Application extends SpringBootServletInitializer {
 	public JdbcTemplate hualienJdbcTempplate() throws PropertyVetoException{
 		return  new JdbcTemplate(dataSourceHualien());
 	}
-//	@Bean(name="analyticsJdbcTempplate")
-//	public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
-//		return  new JdbcTemplate(dataSourceAnalytics());
-//	}
+	
+	@Bean(name="analyticsJdbcTemplate")
+	public JdbcTemplate analyticsJdbcTemplate() throws PropertyVetoException{
+		return  new JdbcTemplate(dataSourceHualien());
+	}
 	
 	@Bean
 	public JobDetailFactoryBean jobDetailFactoryBean() throws PropertyVetoException{
@@ -128,7 +128,6 @@ public class Application extends SpringBootServletInitializer {
 		Map<String, Object> map = new HashMap();
 		map.put("stJdbcTemplate", stJdbcTemplate());
 		map.put("datasource", hualienJdbcTempplate());		
-		//map.put("datasourceAnalytics", analyticsJdbcTempplate());		
 		jobbean.setJobDataAsMap(map);
 		return jobbean;
 	}
