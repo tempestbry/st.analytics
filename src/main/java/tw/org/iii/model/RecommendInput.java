@@ -1,10 +1,11 @@
 package tw.org.iii.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class RecommendInput {
 	String poiId;
-	List<String> countyId;
+	List<String> countyId = new ArrayList();
 	String returnType;
 	
 	

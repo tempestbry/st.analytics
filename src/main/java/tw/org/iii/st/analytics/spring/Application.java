@@ -117,7 +117,7 @@ public class Application extends SpringBootServletInitializer {
 	}
 
 	@Bean(name="analyticsJdbcTemplate")
-	public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
+	public JdbcTemplate analyticsJdbcTemplate() throws PropertyVetoException{
 		return  new JdbcTemplate(dataSourceAnalytics());
 	}
 	

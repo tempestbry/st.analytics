@@ -190,41 +190,71 @@ public class Recommendation {
 				double cb,ar,checkins;
 				HashMap<String,info> record = new HashMap<String,info>();
 				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
-				boolean flag = true;
-				for (Map<String, Object> r : rs) 
+				if (rs.size()>0)
 				{
-					cb = Double.parseDouble(r.get("cb")+"");
-					ar = Double.parseDouble(r.get("ar")+"");
-					checkins = Double.parseDouble(r.get("top")+"");
-					info i = new info(cb,ar,checkins);
-					record.put(r.get("related_id").toString(), i);
-					if (flag)
+					boolean flag = true;
+					for (Map<String, Object> r : rs) 
 					{
-						n.cbMax = cb;
-						n.cbMin = cb;
-						n.arMax = ar;
-						n.arMin = ar;
-						n.checkinsMax = checkins;
-						n.checkinsMin = checkins;
-						flag = false;
+						cb = Double.parseDouble(r.get("cb")+"");
+						ar = Double.parseDouble(r.get("ar")+"");
+						checkins = Double.parseDouble(r.get("top")+"");
+						info i = new info(cb,ar,checkins);
+						record.put(r.get("related_id").toString(), i);
+						if (flag)
+						{
+							n.cbMax = cb;
+							n.cbMin = cb;
+							n.arMax = ar;
+							n.arMin = ar;
+							n.checkinsMax = checkins;
+							n.checkinsMin = checkins;
+							flag = false;
+						}
+						if (cb > n.cbMax)
+							n.cbMax = cb;
+						if (cb < n.cbMin)
+							n.cbMin = cb;
+						if (ar > n.arMax)
+							n.arMax = ar;
+						if (ar < n.arMin)
+							n.arMin = ar;
+						if (checkins > n.checkinsMax)
+							n.checkinsMax = checkins;
+						if (checkins < n.checkinsMin)
+							n.checkinsMin = checkins;
 					}
-					if (cb > n.cbMax)
-						n.cbMax = cb;
-					if (cb < n.cbMin)
-						n.cbMin = cb;
-					if (ar > n.arMax)
-						n.arMax = ar;
-					if (ar < n.arMin)
-						n.arMin = ar;
-					if (checkins > n.checkinsMax)
-						n.checkinsMax = checkins;
-					if (checkins < n.checkinsMin)
-						n.checkinsMin = checkins;
+					n.cbValue = n.cbMax - n.cbMin;
+					n.arValue = n.arMax - n.arMin;
+					n.checkinsValue = n.checkinsMax - n.checkinsMin;
+					result = integrated(record,n);
 				}
-				n.cbValue = n.cbMax - n.cbMin;
-				n.arValue = n.arMax - n.arMin;
-				n.checkinsValue = n.checkinsMax - n.checkinsMin;
-				result = integrated(record,n);
+				else
+				{
+					rs = stJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
+					String county = rs.get(0).get("countyId").toString();
+					ArrayList<String> tmp = new ArrayList<String>();
+					int value = 100000;
+					do
+					{
+						rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,10");
+						for (Map<String, Object> i : rs)
+						{
+							if (!tmp.contains(i.get("id").toString()))
+								tmp.add(i.get("id").toString());
+							if (tmp.size()==10)
+								break;
+						}
+							
+						value-=5000;
+						if (value < 0)
+						{
+							break;
+						}
+					}
+					while (tmp.size()<10);
+					result = tmp.toArray(new String[tmp.size()]);
+				}
+				
 				
 			}
 			
@@ -255,16 +285,16 @@ public class Recommendation {
 			else
 				ch = ((i.checkins - n.checkinsMin) / n.checkinsValue);
 			
-			tmp.put(r, 0.5*cb + 0.2*ar + 0.3*ch);
+			tmp.put(r, 0.5*cb + 0.1*ar + 0.4*ch);
 		}
 		
 		List<Map.Entry<String, Integer>> rank = sortDouble(tmp);
-		String result[] = new String[5];
+		String result[] = new String[10];
 		int j = 0;
 		for (Map.Entry<String, Integer> entry:rank) 
 	    {
 			result[j++] = entry.getKey();
-			if (j==5)
+			if (j==10)
 				break;
 	    }
 		return result;
