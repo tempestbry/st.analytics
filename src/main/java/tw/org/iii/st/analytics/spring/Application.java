@@ -19,6 +19,7 @@ import org.springframework.scheduling.quartz.CronTriggerFactoryBean;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
+import tw.org.iii.st.analytics.controller.STScheduling;
 import tw.org.iii.st.analytics.cronjob.UpdateRecommendation;
 
 import com.mchange.v2.c3p0.ComboPooledDataSource;
@@ -28,110 +29,114 @@ import com.mchange.v2.c3p0.ComboPooledDataSource;
 @EnableAutoConfiguration
 public class Application extends SpringBootServletInitializer {
 
-    @Autowired
-    Environment environment;
+	@Autowired
+	Environment environment;
 
-    @Bean(name = "datasource")
-    @Primary
-    public ComboPooledDataSource dataSourceHualien() throws PropertyVetoException {
-        ComboPooledDataSource dataSource = new ComboPooledDataSource();
-        dataSource.setDriverClass(environment
-                .getRequiredProperty("c3p0.driver"));
-        dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.hualien"));
-        dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
-        dataSource
-                .setPassword(environment.getRequiredProperty("c3p0.password"));
-        dataSource.setInitialPoolSize(environment.getRequiredProperty(
-                "c3p0.initialPoolSize", Integer.class));
-        dataSource.setMaxPoolSize(environment.getRequiredProperty(
-                "c3p0.maxPoolSize", Integer.class));
-        dataSource.setMinPoolSize(environment.getRequiredProperty(
-                "c3p0.minPoolSize", Integer.class));
-        dataSource.setAcquireIncrement(environment.getRequiredProperty(
-                "c3p0.acquireIncrement", Integer.class));
-        dataSource.setMaxStatements(environment.getRequiredProperty(
-                "c3p0.maxStatements", Integer.class));
-        dataSource.setMaxIdleTime(environment.getRequiredProperty(
-                "c3p0.maxIdleTime", Integer.class));
-        return dataSource;
-    }
+	@Bean(name = "datasource")
+	@Primary
+	public ComboPooledDataSource dataSourceHualien() throws PropertyVetoException {
+		ComboPooledDataSource dataSource = new ComboPooledDataSource();
+		dataSource.setDriverClass(environment
+				.getRequiredProperty("c3p0.driver"));
+		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.hualien"));
+		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
+		dataSource
+				.setPassword(environment.getRequiredProperty("c3p0.password"));
+		dataSource.setInitialPoolSize(environment.getRequiredProperty(
+				"c3p0.initialPoolSize", Integer.class));
+		dataSource.setMaxPoolSize(environment.getRequiredProperty(
+				"c3p0.maxPoolSize", Integer.class));
+		dataSource.setMinPoolSize(environment.getRequiredProperty(
+				"c3p0.minPoolSize", Integer.class));
+		dataSource.setAcquireIncrement(environment.getRequiredProperty(
+				"c3p0.acquireIncrement", Integer.class));
+		dataSource.setMaxStatements(environment.getRequiredProperty(
+				"c3p0.maxStatements", Integer.class));
+		dataSource.setMaxIdleTime(environment.getRequiredProperty(
+				"c3p0.maxIdleTime", Integer.class));
+		return dataSource;
+	}
+	
+	@Bean(name = "datasourceST")
+	public ComboPooledDataSource dataSourceST() throws PropertyVetoException {
+		ComboPooledDataSource dataSource = new ComboPooledDataSource();
+		dataSource.setDriverClass(environment
+				.getRequiredProperty("c3p0.driver"));
+		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.st"));
+		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
+		dataSource
+				.setPassword(environment.getRequiredProperty("c3p0.password"));
+		dataSource.setInitialPoolSize(environment.getRequiredProperty(
+				"c3p0.initialPoolSize", Integer.class));
+		dataSource.setMaxPoolSize(environment.getRequiredProperty(
+				"c3p0.maxPoolSize", Integer.class));
+		dataSource.setMinPoolSize(environment.getRequiredProperty(
+				"c3p0.minPoolSize", Integer.class));
+		dataSource.setAcquireIncrement(environment.getRequiredProperty(
+				"c3p0.acquireIncrement", Integer.class));
+		dataSource.setMaxStatements(environment.getRequiredProperty(
+				"c3p0.maxStatements", Integer.class));
+		dataSource.setMaxIdleTime(environment.getRequiredProperty(
+				"c3p0.maxIdleTime", Integer.class));
+		return dataSource;
+	}
+	@Bean(name = "datasourceAnalytics")
+	public ComboPooledDataSource dataSourceAnalytics() throws PropertyVetoException {
+		ComboPooledDataSource dataSource = new ComboPooledDataSource();
+		dataSource.setDriverClass(environment
+				.getRequiredProperty("c3p0.driver"));
+		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.analytics"));
+		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
+		dataSource
+				.setPassword(environment.getRequiredProperty("c3p0.password"));
+		dataSource.setInitialPoolSize(environment.getRequiredProperty(
+				"c3p0.initialPoolSize", Integer.class));
+		dataSource.setMaxPoolSize(environment.getRequiredProperty(
+				"c3p0.maxPoolSize", Integer.class));
+		dataSource.setMinPoolSize(environment.getRequiredProperty(
+				"c3p0.minPoolSize", Integer.class));
+		dataSource.setAcquireIncrement(environment.getRequiredProperty(
+				"c3p0.acquireIncrement", Integer.class));
+		dataSource.setMaxStatements(environment.getRequiredProperty(
+				"c3p0.maxStatements", Integer.class));
+		dataSource.setMaxIdleTime(environment.getRequiredProperty(
+				"c3p0.maxIdleTime", Integer.class));
+		return dataSource;
+	}
+	
+	
+	@Bean(name="stJdbcTemplate") 
+	public JdbcTemplate stJdbcTemplate() throws PropertyVetoException{
+		return new JdbcTemplate(dataSourceST()); 
+	}
+	
+	
+	@Bean(name="hualienJdbcTempplate")
+	public JdbcTemplate hualienJdbcTempplate() throws PropertyVetoException{
+		return  new JdbcTemplate(dataSourceHualien());
+	}
 
-    @Bean(name = "datasourceST")
-    public ComboPooledDataSource dataSourceST() throws PropertyVetoException {
-        ComboPooledDataSource dataSource = new ComboPooledDataSource();
-        dataSource.setDriverClass(environment
-                .getRequiredProperty("c3p0.driver"));
-        dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.st"));
-        dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
-        dataSource
-                .setPassword(environment.getRequiredProperty("c3p0.password"));
-        dataSource.setInitialPoolSize(environment.getRequiredProperty(
-                "c3p0.initialPoolSize", Integer.class));
-        dataSource.setMaxPoolSize(environment.getRequiredProperty(
-                "c3p0.maxPoolSize", Integer.class));
-        dataSource.setMinPoolSize(environment.getRequiredProperty(
-                "c3p0.minPoolSize", Integer.class));
-        dataSource.setAcquireIncrement(environment.getRequiredProperty(
-                "c3p0.acquireIncrement", Integer.class));
-        dataSource.setMaxStatements(environment.getRequiredProperty(
-                "c3p0.maxStatements", Integer.class));
-        dataSource.setMaxIdleTime(environment.getRequiredProperty(
-                "c3p0.maxIdleTime", Integer.class));
-        return dataSource;
-    }
-
-    @Bean(name = "datasourceAnalytics")
-    public ComboPooledDataSource dataSourceAnalytics() throws PropertyVetoException {
-        ComboPooledDataSource dataSource = new ComboPooledDataSource();
-        dataSource.setDriverClass(environment
-                .getRequiredProperty("c3p0.driver"));
-        dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.analytics"));
-        dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
-        dataSource
-                .setPassword(environment.getRequiredProperty("c3p0.password"));
-        dataSource.setInitialPoolSize(environment.getRequiredProperty(
-                "c3p0.initialPoolSize", Integer.class));
-        dataSource.setMaxPoolSize(environment.getRequiredProperty(
-                "c3p0.maxPoolSize", Integer.class));
-        dataSource.setMinPoolSize(environment.getRequiredProperty(
-                "c3p0.minPoolSize", Integer.class));
-        dataSource.setAcquireIncrement(environment.getRequiredProperty(
-                "c3p0.acquireIncrement", Integer.class));
-        dataSource.setMaxStatements(environment.getRequiredProperty(
-                "c3p0.maxStatements", Integer.class));
-        dataSource.setMaxIdleTime(environment.getRequiredProperty(
-                "c3p0.maxIdleTime", Integer.class));
-        return dataSource;
-    }
-
-
-    @Bean(name="stJdbcTemplate")
-    public JdbcTemplate stJdbcTemplate() throws PropertyVetoException{
-        return new JdbcTemplate(dataSourceST());
-    }
-
-
-    @Bean(name="hualienJdbcTempplate")
-    public JdbcTemplate hualienJdbcTempplate() throws PropertyVetoException{
-        return  new JdbcTemplate(dataSourceHualien());
-    }
-    @Bean(name="analyticsJdbcTemplate")
-    public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
-        return  new JdbcTemplate(dataSourceAnalytics());
-    }
-
-    @Bean
-    public JobDetailFactoryBean jobDetailFactoryBean() throws PropertyVetoException{
-        JobDetailFactoryBean jobbean = new JobDetailFactoryBean();
-        jobbean.setJobClass(UpdateRecommendation.class);
-
-        Map<String, Object> map = new HashMap();
-        map.put("stJdbcTemplate", stJdbcTemplate());
-        map.put("datasource", hualienJdbcTempplate());
-        //map.put("datasourceAnalytics", analyticsJdbcTempplate());
-        jobbean.setJobDataAsMap(map);
-        return jobbean;
-    }
+	@Bean(name="analyticsJdbcTemplate")
+	public JdbcTemplate analyticsJdbcTempplate() throws PropertyVetoException{
+		return  new JdbcTemplate(dataSourceAnalytics());
+	}
+	
+	@Bean
+	public JobDetailFactoryBean jobDetailFactoryBean() throws PropertyVetoException{
+		JobDetailFactoryBean jobbean = new JobDetailFactoryBean();
+		jobbean.setJobClass(UpdateRecommendation.class);
+		
+		Map<String, Object> map = new HashMap();
+		map.put("stJdbcTemplate", stJdbcTemplate());
+		map.put("datasource", hualienJdbcTempplate());		
+		jobbean.setJobDataAsMap(map);
+		return jobbean;
+	}
+	
+	@Bean(name="STScheduling")
+	public STScheduling stscheduling(){
+		return new STScheduling();
+	}
 	
 	/*@Bean
 	public CronTriggerFactoryBean cronTriggerFactoryBean() throws PropertyVetoException{
@@ -151,14 +156,14 @@ public class Application extends SpringBootServletInitializer {
 		return bean;
 	}*/
 
-    @Override
-    protected SpringApplicationBuilder configure(
-            SpringApplicationBuilder application) {
-        return application.sources(Application.class);
-    }
+	@Override
+	protected SpringApplicationBuilder configure(
+			SpringApplicationBuilder application) {
+		return application.sources(Application.class);
+	}
 
-    public static void main(String[] args) throws Exception {
-        SpringApplication.run(Application.class, args);
-    }
+	public static void main(String[] args) throws Exception {
+		SpringApplication.run(Application.class, args);
+	}
 
 }

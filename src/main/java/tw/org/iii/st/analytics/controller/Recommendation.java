@@ -1,17 +1,6 @@
 package tw.org.iii.st.analytics.controller;
 
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import tw.org.iii.model.PoiCheckins;
-import tw.org.iii.model.RecommendInfo;
-import tw.org.iii.model.RecommendInput;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -23,6 +12,29 @@ import java.text.ParseException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+
+
+
+
+
+
+
+
+
+
+import tw.org.iii.model.PoiCheckins;
+import tw.org.iii.model.RecommendInfo;
+import tw.org.iii.model.RecommendInput;
 
 @RestController
 @RequestMapping("/Recommendation")
@@ -85,7 +97,7 @@ public class Recommendation {
 			}
 			else //智慧觀光平台的
 			{
-				result = FinStBestPOI(json.getGps().getLng(), json.getGps().getLat());
+				result = FinStBestPOI(json);
 				return result;
 			}
 	
@@ -177,7 +189,7 @@ public class Recommendation {
 				normalize n = new normalize();
 				double cb,ar,checkins;
 				HashMap<String,info> record = new HashMap<String,info>();
-				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"'");
+				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
 				boolean flag = true;
 				for (Map<String, Object> r : rs) 
 				{
@@ -416,21 +428,56 @@ public class Recommendation {
 		
 	}
 	
-	private String[] FinStBestPOI(double px,double py) throws IOException
+	private String[] FinStBestPOI(RecommendInput json) throws IOException
 	{
-		String city = askGoogle_all(px,py);
+		
 		ArrayList<String> result = new ArrayList<String>();
-		if (city.equals("all")) //全部縣市隨機Top推薦
+		List<Map<String, Object>> rs;
+		if (json.getCountyId().size()==0) //全部縣市隨機Top推薦
 		{
-			List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and checkins > 50000 GROUP BY fb_id ORDER by rand() limit 0,5");
-			for (Map<String, Object> i : rs)
-				result.add(i.get("id").toString());
+			//String city = askGoogle_all(json.getGps().getLng(), json.getGps().getLat());
+			int value = 100000;
+			do
+			{
+				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,10");
+				for (Map<String, Object> i : rs)
+				{
+					if (!result.contains(i.get("id").toString()))
+						result.add(i.get("id").toString());
+					if (result.size()==10)
+						break;
+				}
+					
+				value-=5000;
+				if (value < 0)
+				{
+					break;
+				}
+			}
+			while (result.size()<10);
 		}
 		else //指定縣市的Top景點推薦
 		{
-			List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and countyId = '"+city+"' and checkins > 30000 GROUP BY fb_id ORDER by rand() limit 0,5");
-			for (Map<String, Object> i : rs)
-				result.add(i.get("id").toString());
+			int value = 100000;
+			do
+			{
+				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and countyId = '"+json.getCountyId().get(0)+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,10");
+				for (Map<String, Object> i : rs)
+				{
+					if (!result.contains(i.get("id").toString()))
+						result.add(i.get("id").toString());
+					if (result.size()==10)
+						break;
+				}
+					
+				value-=5000;
+				if (value < 0)
+				{
+					break;
+				}
+			}
+			while (result.size()<10);
+			
 		}
 		return result.toArray(new String[result.size()]);
 	}

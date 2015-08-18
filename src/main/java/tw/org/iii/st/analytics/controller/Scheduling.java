@@ -1,5 +1,21 @@
 package tw.org.iii.st.analytics.controller;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.annotation.sql.DataSourceDefinition;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -8,22 +24,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+
 import tw.org.iii.model.GeoPoint;
+import tw.org.iii.model.RecommendInput;
 import tw.org.iii.model.SchedulingInput;
 import tw.org.iii.model.TourEvent;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import tw.org.iii.st.analytics.spring.Application;
 
 /**
  * Hello~~
@@ -40,105 +46,124 @@ public class Scheduling {
 	@Qualifier("stJdbcTemplate")
 	private JdbcTemplate stJdbcTemplate;
 
+	@Autowired
+	@Qualifier("analyticsJdbcTemplate")
+	private JdbcTemplate analyticsjdbc;
+	
+	
+	@Autowired
+	@Qualifier("STScheduling")
+	private STScheduling stScheduling;
+	
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	
 	@RequestMapping("/QuickPlan")
 	private @ResponseBody
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException {
 
-		//行程規劃結果
-		ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
-		ArrayList<TourEvent> finalResult = new ArrayList<TourEvent>();
-
-		int lastTime;
-		
-		HashMap<String,String> mapping = startMapping(); //建立新舊preference比照表
-		ArrayList<String> repeat = new ArrayList<String>();
-		String city = getCity(json.getCityList()); //取得city
-		String preference = getPreference(json.getPreferenceList(),mapping); //取得preference
-		String weekday = getWeekday(json.getStartTime()); //知道當天星期幾
-		
-		int freetime = FreeTime(json.getStartTime(), json.getEndTime()); //取得旅程總時間
-		int index=0;
-		
-		
-		/**test*/
-		System.out.println(json.getStartTime());
-		System.out.println(json.getEndTime());
-//		Calendar cal = Calendar.getInstance(); // creates calendar
-//		cal.setTime(si.getStartTime()); // sets calendar time/date
-//		//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
-//		si.setStartTime(cal.getTime());
-//		System.out.println(si.getStartTime());
-//		
-//		System.out.println(si.getEndTime());
-//		cal = Calendar.getInstance(); // creates calendar
-//		cal.setTime(si.getEndTime()); // sets calendar time/date
-//		//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
-//		si.setEndTime(cal.getTime());
-//		System.out.println(si.getEndTime());
-
-		
-		tourInfo ti = new tourInfo(index,freetime,json.getStartTime(),json.getEndTime(),json.getGps().getLng(),json.getGps().getLat());
-		ti.weekday = weekday;
-		ti.preference = preference;
-		ti.city = city;
-		ti.startPOI = json.getStartPoiId();
-		ti.endPOI = json.getEndPoiId();
-		
-		try
+		List<TourEvent> finalResult = new ArrayList<TourEvent>();
+		if (json.getCityList().size()==1 && json.getCityList().get(0).contains("TW18") && json.getCityList().get(0).contains("TW19"))
 		{
-			ti.flag = askGoogle(ti.px,ti.py);
-		}
-		catch (IOException e)
-		{
-		}
-		
-		if (json.getEndPoiId() != null || !"".equals(json.getEndPoiId()))
-			ti.repeat.add(json.getEndPoiId());
-		//一般行程規劃(當日)
-		if (json.getTourType() == null || "".equals(json.getTourType()) || !json.getTourType().contains("play-")) {
-//			SimpleDateFormat sdFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-//			TourEvent test = new TourEvent();
-//			test.setPoiId("C1_315081200H_000101");
-//			test.setStartTime(sdFormat.parse("2015/07/20 10:43:28"));
-//			test.setEndTime(sdFormat.parse("2015/07/20 15:43:28"));
-//			PlanResult.add(test);
+			//行程規劃結果
+			ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
+			int lastTime;
+			
+			HashMap<String,String> mapping = startMapping(); //建立新舊preference比照表
+			ArrayList<String> repeat = new ArrayList<String>();
+			String city = getCity(json.getCityList()); //取得city
+			String preference = getPreference(json.getPreferenceList(),mapping); //取得preference
+			String weekday = getWeekday(json.getStartTime()); //知道當天星期幾
+			
+			int freetime = FreeTime(json.getStartTime(), json.getEndTime()); //取得旅程總時間
+			int index=0;
+			
+			
+			/**test*/
+			System.out.println(json.getStartTime());
+			System.out.println(json.getEndTime());
+//			Calendar cal = Calendar.getInstance(); // creates calendar
+//			cal.setTime(si.getStartTime()); // sets calendar time/date
+//			//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
+//			si.setStartTime(cal.getTime());
+//			System.out.println(si.getStartTime());
 //			
-			
-			PlanResult.addAll(findTop(ti));
-			ti.repeat.add(PlanResult.get(0).getPoiId()); //將選過的景點加入repeat清單
-			ti.index = PlanResult.size(); //index推進
-			
-			//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
-			PlanResult = getOtherPOI(PlanResult,ti);
+//			System.out.println(si.getEndTime());
+//			cal = Calendar.getInstance(); // creates calendar
+//			cal.setTime(si.getEndTime()); // sets calendar time/date
+//			//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
+//			si.setEndTime(cal.getTime());
+//			System.out.println(si.getEndTime());
 
-			for (TourEvent t : PlanResult) {
-				List<String> name = placeName("SELECT name FROM Detail WHERE poiId = '"+t.getPoiId()+"'");
-				System.out.println(name.get(0) + "," + t.getPoiId() + "," + t.getStartTime() + ","
-						+ t.getEndTime());
+			
+			tourInfo ti = new tourInfo(index,freetime,json.getStartTime(),json.getEndTime(),json.getGps().getLng(),json.getGps().getLat());
+			ti.weekday = weekday;
+			ti.preference = preference;
+			ti.city = city;
+			ti.startPOI = json.getStartPoiId();
+			ti.endPOI = json.getEndPoiId();
+			
+			try
+			{
+				ti.flag = askGoogle(ti.px,ti.py);
+			}
+			catch (IOException e)
+			{
+			}
+			
+			if (json.getEndPoiId() != null || !"".equals(json.getEndPoiId()))
+				ti.repeat.add(json.getEndPoiId());
+			//一般行程規劃(當日)
+			if (json.getTourType() == null || "".equals(json.getTourType()) || !json.getTourType().contains("play-")) {
+//				SimpleDateFormat sdFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+//				TourEvent test = new TourEvent();
+//				test.setPoiId("C1_315081200H_000101");
+//				test.setStartTime(sdFormat.parse("2015/07/20 10:43:28"));
+//				test.setEndTime(sdFormat.parse("2015/07/20 15:43:28"));
+//				PlanResult.add(test);
+//				
+				
+				PlanResult.addAll(findTop(ti));
+				ti.repeat.add(PlanResult.get(0).getPoiId()); //將選過的景點加入repeat清單
+				ti.index = PlanResult.size(); //index推進
+				
+				//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
+				PlanResult = getOtherPOI(PlanResult,ti);
+
+				for (TourEvent t : PlanResult) {
+					List<String> name = placeName("SELECT name FROM Detail WHERE poiId = '"+t.getPoiId()+"'");
+					System.out.println(name.get(0) + "," + t.getPoiId() + "," + t.getStartTime() + ","
+							+ t.getEndTime());
+				}
+
+			} else { //任務模式
+				PlanResult.addAll(getMission1(ti,json.getTourType()));
+				for (TourEvent r : PlanResult)
+					ti.repeat.add(r.getPoiId()); //將選過的景點加入repeat清單
+				ti.index = PlanResult.size(); //index推進
+				
+				
+				//freetime = FreeTime(PlanResult.get(2).getEndTime(),si.getEndTime());
+				PlanResult = getOtherPOI(PlanResult,ti);
+				for (TourEvent t : PlanResult) {
+					System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
+							+ t.getEndTime());
+				}
+
 			}
 
-		} else { //任務模式
-			PlanResult.addAll(getMission1(ti,json.getTourType()));
-			for (TourEvent r : PlanResult)
-				ti.repeat.add(r.getPoiId()); //將選過的景點加入repeat清單
-			ti.index = PlanResult.size(); //index推進
+			finalResult = new ArrayList<TourEvent>();
+			finalResult.addAll(PlanResult);
 			
-			
-			//freetime = FreeTime(PlanResult.get(2).getEndTime(),si.getEndTime());
-			PlanResult = getOtherPOI(PlanResult,ti);
-			for (TourEvent t : PlanResult) {
-				System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
-						+ t.getEndTime());
-			}
-
+			return finalResult;
 		}
-
-		finalResult = new ArrayList<TourEvent>();
-		finalResult.addAll(PlanResult);
+		else
+		{
+			
+			finalResult = stScheduling.scheduling(json);
+			return finalResult;
+		}
 		
-		return finalResult;
+		
 	}
 	private String getPreference(List<String> p,HashMap<String,String> mapping)
 	{
@@ -764,6 +789,7 @@ public class Scheduling {
 			return py;
 		}
 	}
+	
 	
 	
 }

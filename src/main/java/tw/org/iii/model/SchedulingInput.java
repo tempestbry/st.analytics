@@ -1,8 +1,6 @@
 package tw.org.iii.model;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 public class SchedulingInput 
 {
 	private List<String> cityList = new ArrayList<String>();
@@ -16,6 +14,8 @@ public class SchedulingInput
 	private String startPoiId;
 	
 	private String endPoiId;
+
+	private List<String> mustPoiList;
 	
 	private boolean shake;
 
@@ -37,9 +37,13 @@ public class SchedulingInput
 		this.preferenceList = preferenceList;
 	}
 
-	
+	public List<String> getMustPoiList() {
+		return mustPoiList;
+	}
 
-	
+	public void setMustPoiList(List<String> mustPoiList) {
+		this.mustPoiList = mustPoiList;
+	}
 
 	public Date getStartTime() {
 		return startTime;
