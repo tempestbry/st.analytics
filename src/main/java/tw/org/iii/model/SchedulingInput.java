@@ -15,7 +15,7 @@ public class SchedulingInput
 	
 	private String endPoiId;
 
-	private List<String> mustPoiList;
+	private List<String> mustPoiList = new ArrayList<String>();
 	
 	private boolean shake;
 
