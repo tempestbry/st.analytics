@@ -51,9 +51,9 @@ public class Scheduling {
 	private JdbcTemplate analyticsjdbc;
 	
 	
-	@Autowired
-	@Qualifier("STScheduling")
-	private STScheduling stScheduling;
+//	@Autowired
+//	@Qualifier("STScheduling")
+//	private STScheduling stScheduling;
 	
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	
@@ -158,9 +158,10 @@ public class Scheduling {
 		}
 		else
 		{
-			
-			finalResult = stScheduling.scheduling(json);
-			return finalResult;
+//			
+//			finalResult = stScheduling.scheduling(json);
+//			return finalResult;
+			return null;
 		}
 		
 		
