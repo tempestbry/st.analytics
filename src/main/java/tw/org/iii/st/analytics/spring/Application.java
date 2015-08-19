@@ -19,7 +19,7 @@ import org.springframework.scheduling.quartz.CronTriggerFactoryBean;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
-import tw.org.iii.st.analytics.controller.STScheduling;
+//import tw.org.iii.st.analytics.controller.STScheduling;
 import tw.org.iii.st.analytics.cronjob.UpdateRecommendation;
 
 import com.mchange.v2.c3p0.ComboPooledDataSource;
@@ -133,10 +133,12 @@ public class Application extends SpringBootServletInitializer {
 		return jobbean;
 	}
 	
+	/*
 	@Bean(name="STScheduling")
 	public STScheduling stscheduling(){
 		return new STScheduling();
 	}
+	*/
 	
 	/*@Bean
 	public CronTriggerFactoryBean cronTriggerFactoryBean() throws PropertyVetoException{
