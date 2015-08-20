@@ -470,7 +470,8 @@ public class Recommendation {
 			int value = 100000;
 			do
 			{
-				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,10");
+				//themeId NOT LIKE 'FO%' and 
+				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,10");
 				for (Map<String, Object> i : rs)
 				{
 					if (!result.contains(i.get("id").toString()))
@@ -492,7 +493,8 @@ public class Recommendation {
 			int value = 100000;
 			do
 			{
-				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE themeId NOT LIKE 'FO%' and countyId = '"+json.getCountyId().get(0)+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,10");
+				//themeId NOT LIKE 'FO%' and 
+				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,10");
 				for (Map<String, Object> i : rs)
 				{
 					if (!result.contains(i.get("id").toString()))

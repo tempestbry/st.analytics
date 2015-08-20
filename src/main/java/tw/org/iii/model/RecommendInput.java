@@ -37,7 +37,7 @@ public class RecommendInput {
 	}
 	
 	public String getReturnType() {
-		return returnType;
+		return "poi".equals(returnType) ? "0,1,2,3,4" : returnType;
 	}
 	public void setReturnType(String type) {
 		this.returnType = type;
