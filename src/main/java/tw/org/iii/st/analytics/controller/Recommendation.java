@@ -471,7 +471,9 @@ public class Recommendation {
 			do
 			{
 				//themeId NOT LIKE 'FO%' and 
-				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,10");
+				
+				//SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= 0 and type in (2) GROUP BY uniq ORDER by rand() limit 0,10
+				rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,10");
 				for (Map<String, Object> i : rs)
 				{
 					if (!result.contains(i.get("id").toString()))
