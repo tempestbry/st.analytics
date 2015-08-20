@@ -50,6 +50,7 @@ public class Recommendation {
 	@Autowired
 	@Qualifier("analyticsJdbcTemplate")
 	private JdbcTemplate analyticsjdbc;
+	
 	//test
 	
 //	@RequestMapping("/ThisTime")
