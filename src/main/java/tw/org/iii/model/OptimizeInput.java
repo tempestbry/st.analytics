@@ -23,7 +23,14 @@ public class OptimizeInput {
 	*/
 	
 	public List<Poi> getMustPoiList() {
-		return mustPoiList;
+		//Check Null POI.
+		List<Poi> checkedPoilist = new ArrayList<Poi>();
+		for(int i=0; i< mustPoiList.size(); i++) {
+			if(mustPoiList.get(i)!=null) {
+				checkedPoilist.add(mustPoiList.get(i));
+			}
+		}	
+		return checkedPoilist;
 	}
 	public void setMustPoiList(List<Poi> aMustPoiList) {
 		this.mustPoiList = aMustPoiList;
