@@ -13,6 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 import tw.org.iii.model.SchedulingInput;
 import tw.org.iii.model.TourEvent;
 
+/**
+ * 
+ * @author simcoehsieh
+ *
+ */
 public class STScheduling 
 {
 	@Autowired
