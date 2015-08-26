@@ -21,6 +21,16 @@ public class SchedulingInput
 
 	private String tourType;
 	
+	private int looseType;
+	
+	public int getLooseType() {
+		return looseType;
+	}
+
+	public void setLooseType(int looseType) {
+		this.looseType = looseType;
+	}
+
 	public List<String> getCityList() {
 		return cityList;
 	}

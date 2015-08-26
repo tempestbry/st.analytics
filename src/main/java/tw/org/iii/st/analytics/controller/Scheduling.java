@@ -51,9 +51,9 @@ public class Scheduling {
 	private JdbcTemplate analyticsjdbc;
 	
 	
-//	@Autowired
-//	@Qualifier("STScheduling")
-//	private STScheduling stScheduling;
+	@Autowired
+	@Qualifier("STScheduling")
+	private STScheduling stScheduling;
 	
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	
@@ -62,8 +62,8 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException {
 
 		List<TourEvent> finalResult = new ArrayList<TourEvent>();
-//		if (json.getCityList().size()==1 && json.getCityList().get(0).contains("TW18"))
-//		{
+		if (json.getCityList().size()==1 && json.getCityList().get(0).contains("TW18"))
+		{
 			//行程規劃結果
 			ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
 			int lastTime;
@@ -155,14 +155,14 @@ public class Scheduling {
 			finalResult.addAll(PlanResult);
 			
 			return finalResult;
-//		}
-//		else
-//		{
-////			
-////			finalResult = stScheduling.scheduling(json);
-////			return finalResult;
-//			return null;
-//		}
+		}
+		else
+		{
+//			
+			finalResult = stScheduling.scheduling(json);
+			return finalResult;
+			//return null;
+		}
 		
 		
 	}
