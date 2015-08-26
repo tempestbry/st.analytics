@@ -194,10 +194,15 @@ public class STScheduling
 	{
 		String str = "";
 		List<String> must = json.getMustPoiList();
-		for (int i=0;i<must.size()-1;i++)
-			str+= "poiId = '" + must.get(i) + "' or ";
-		str+= "poiId = '" + must.get(must.size()-1) + "'";
-		ArrayList<String> mustCounty = getMustCounty(str); //取得必去景點所在的縣市
+		ArrayList<String> mustCounty = new ArrayList<String>();
+		if (must.size()>0)
+		{
+			for (int i=0;i<must.size()-1;i++)
+				str+= "poiId = '" + must.get(i) + "' or ";
+			str+= "poiId = '" + must.get(must.size()-1) + "'";
+			mustCounty = getMustCounty(str); //取得必去景點所在的縣市
+		}
+		
 		 
 			
 
