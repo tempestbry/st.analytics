@@ -479,7 +479,7 @@ public class Recommendation {
 					if (!result.contains(i.get("id").toString()))
 						result.add(i.get("id").toString());
 					if (result.size()==10)
-						break;
+						break; 
 				}
 					
 				value-=5000;
