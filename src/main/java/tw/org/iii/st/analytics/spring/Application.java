@@ -1,10 +1,15 @@
 package tw.org.iii.st.analytics.spring;
 
 import java.beans.PropertyVetoException;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -19,11 +24,13 @@ import org.springframework.scheduling.quartz.CronTriggerFactoryBean;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
-
 import tw.org.iii.st.analytics.controller.STScheduling;
 //import tw.org.iii.st.analytics.controller.STScheduling;
 import tw.org.iii.st.analytics.cronjob.UpdateRecommendation;
 
+import com.chenlb.mmseg4j.ComplexSeg;
+import com.chenlb.mmseg4j.Dictionary;
+import com.chenlb.mmseg4j.Seg;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 @Configuration
@@ -140,7 +147,64 @@ public class Application extends SpringBootServletInitializer {
 	public STScheduling stscheduling(){
 		return new STScheduling();
 	}
+	
 
+	
+	
+	@Bean(name="readTerms")
+	public HashMap<String,String> readTerms()
+	{
+		JdbcTemplate analytics = null;
+		try {
+			analytics = new JdbcTemplate(dataSourceAnalytics());
+		} catch (PropertyVetoException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		HashMap<String,String> term = new HashMap<String,String>();
+		List<Map<String, Object>> rs = analytics.queryForList("SELECT * FROM poiName_new");
+		for (Map<String, Object> r : rs)
+		{
+			if (r.get("name").toString().length()==1)
+				continue;
+			term.put(r.get("name").toString(), r.get("poiId").toString());
+		}
+		return term;
+	}
+	
+//	@Bean(name="loadDic")
+//	public Seg loadDic()
+//	{
+//		
+//	    Dictionary dic = Dictionary.getInstance();
+//	    
+//	    String classpath = System.getProperty("java.class.path");
+//		System.out.println(classpath);
+//		String p[] = classpath.split(";");
+//		
+//		String exampleString = p[0].substring(0,p[0].lastIndexOf("\\")) + "\\" + "word.dic";
+////       for (String t : term.keySet())
+////       {
+////    	   exampleString = t;
+//    	   try 
+//    	   {
+//	            InputStream stream = new ByteArrayInputStream(exampleString.getBytes(StandardCharsets.UTF_8));
+//	            Dictionary.load(stream, new Dictionary.FileLoading() {
+//	                @Override
+//	                public void row(String s, int i) {
+//	                }
+//	            });
+//
+//
+//	       } catch (Exception e) {
+//	            e.printStackTrace();
+//	        }
+////       }
+//	       
+//	        
+//	   Seg seg = new ComplexSeg(dic);
+//	   return seg;
+//	}
 	
 	/*@Bean
 	public CronTriggerFactoryBean cronTriggerFactoryBean() throws PropertyVetoException{
