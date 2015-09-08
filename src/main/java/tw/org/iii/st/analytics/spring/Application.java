@@ -3,10 +3,13 @@ package tw.org.iii.st.analytics.spring;
 import java.beans.PropertyVetoException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,8 +31,10 @@ import tw.org.iii.st.analytics.controller.STScheduling;
 //import tw.org.iii.st.analytics.controller.STScheduling;
 import tw.org.iii.st.analytics.cronjob.UpdateRecommendation;
 
+import com.chenlb.mmseg4j.CharNode;
 import com.chenlb.mmseg4j.ComplexSeg;
 import com.chenlb.mmseg4j.Dictionary;
+import com.chenlb.mmseg4j.Dictionary.FileLoading;
 import com.chenlb.mmseg4j.Seg;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
@@ -172,39 +177,94 @@ public class Application extends SpringBootServletInitializer {
 		return term;
 	}
 	
-//	@Bean(name="loadDic")
-//	public Seg loadDic()
-//	{
-//		
-//	    Dictionary dic = Dictionary.getInstance();
-//	    
-//	    String classpath = System.getProperty("java.class.path");
-//		System.out.println(classpath);
-//		String p[] = classpath.split(";");
-//		
-//		String exampleString = p[0].substring(0,p[0].lastIndexOf("\\")) + "\\" + "word.dic";
-////       for (String t : term.keySet())
-////       {
-////    	   exampleString = t;
-//    	   try 
-//    	   {
-//	            InputStream stream = new ByteArrayInputStream(exampleString.getBytes(StandardCharsets.UTF_8));
-//	            Dictionary.load(stream, new Dictionary.FileLoading() {
-//	                @Override
-//	                public void row(String s, int i) {
-//	                }
-//	            });
-//
-//
-//	       } catch (Exception e) {
-//	            e.printStackTrace();
-//	        }
-////       }
-//	       
-//	        
-//	   Seg seg = new ComplexSeg(dic);
-//	   return seg;
-//	}
+	@Bean(name="loadDic")
+	public Seg loadDic()
+	{
+		System.out.println("init loadDic");
+
+	    Dictionary dic = Dictionary.getInstance();
+
+	    
+		String exampleString = "12咖啡\r\n隨意鳥地方\r\n";//p[0].substring(0,p[0].lastIndexOf("\\")) + "\\" + "word.dic";
+
+    	   try 
+    	   {
+	            InputStream stream = new ByteArrayInputStream(exampleString.getBytes(StandardCharsets.UTF_8));
+	            System.out.println(exampleString.getBytes(StandardCharsets.UTF_8));
+	            Dictionary.load(stream, new FileLoading() {
+
+	    			@Override
+	    			public void row(String line, int n) {
+	    				//System.out.println("n=" + n + " -> " + toWords(line, sa));
+	    				// 保证标准的可运行
+	    			}
+
+	    		});
+
+
+	       } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+//       }
+		
+//		 //FileInputStream fis=new FileInputStream(new File("dic/word-with-attr.dic"));
+//		  final Set<String> words=new TreeSet<String>();
+//		  final int[] num={0};
+//		  FileLoading fl=new FileLoading(){
+//		    public void row(    String line,    int n){
+//		      words.add(line.trim());
+//		      num[0]++;
+//		    }
+//		  }
+//		;
+//		try {
+//			InputStream stin = this.getClass().getResourceAsStream("words.dic");
+//			
+//			Dictionary.load(stin,fl);
+//			
+//		} catch (Exception e) {
+//			// TODO: handle exception
+//			e.printStackTrace();
+//		}
+	       
+	        
+	   Seg seg = new ComplexSeg(dic);
+	   return seg;
+	}
+	
+	private static class WordsFileLoading implements FileLoading {
+		final Map<Character, CharNode> dic;
+
+		/**
+		 * @param dic 加载的词，保存在此结构中。
+		 */
+		public WordsFileLoading(Map<Character, CharNode> dic) {
+			this.dic = dic;
+		}
+
+		public void row(String line, int n) {
+			System.out.println(line);
+			if(line.length() < 2) {
+				return;
+			}
+			CharNode cn = dic.get(line.charAt(0));
+			if(cn == null) {
+				cn = new CharNode();
+				dic.put(line.charAt(0), cn);
+			}
+			cn.addWordTail(tail(line));
+		}
+		
+		/**
+		 * 取得 str 除去第一个char的部分
+		 * @author chenlb 2009-3-3 下午10:05:26
+		 */
+		private static char[] tail(String str) {
+			char[] cs = new char[str.length()-1];
+			str.getChars(1, str.length(), cs, 0);
+			return cs;
+		}
+	}
 	
 	/*@Bean
 	public CronTriggerFactoryBean cronTriggerFactoryBean() throws PropertyVetoException{

@@ -30,16 +30,16 @@ public class CommentIdentify
 	@Qualifier("readTerms")
 	private HashMap<String,String> terms;
 	
-//	@Autowired
-//	@Qualifier("loadDic")
-//	private Seg seg;
+	@Autowired
+	@Qualifier("loadDic")
+	private Seg seg;
 	
 	@RequestMapping("/StartIdentify")
 	private @ResponseBody
 	List<String> startIdentify(@RequestBody String comment)
 	{
-//		String segResult = segmentation(comment);
-//		System.out.println(segResult);
+		String segResult = segmentation(comment);
+		System.out.println(segResult);
 		List<String> poiId = new ArrayList<String>();
 		for (String t : terms.keySet())
 		{
@@ -56,30 +56,30 @@ public class CommentIdentify
 		}
 		return poiId;
 	}
-//	private String segmentation(String comment)
-//	{
-//		  Reader input = new StringReader(comment);
-//	      StringBuilder sb = new StringBuilder();
-//	      MMSeg mmSeg = new MMSeg(input, seg);
-//	      Word word = null;
-//	      boolean first = true;
-//	      try 
-//	      {
-//	          while ((word = mmSeg.next()) != null)
-//	          {
-//	              if (!first) 
-//	                    sb.append("|");
-//	              String w = word.getString();
-//	              sb.append(w);
-//	              first = false;
-//	          }
-//	      } catch (IOException e) {
-//	            e.printStackTrace();
-//	      }
-//
-//	      System.out.println(sb.toString());
-//	      return sb.toString();
-//	}
+	private String segmentation(String comment)
+	{
+		  Reader input = new StringReader(comment);
+	      StringBuilder sb = new StringBuilder();
+	      MMSeg mmSeg = new MMSeg(input, seg);
+	      Word word = null;
+	      boolean first = true;
+	      try 
+	      {
+	          while ((word = mmSeg.next()) != null)
+	          {
+	              if (!first) 
+	                    sb.append("|");
+	              String w = word.getString();
+	              sb.append(w);
+	              first = false;
+	          }
+	      } catch (IOException e) {
+	            e.printStackTrace();
+	      }
+
+	      System.out.println(sb.toString());
+	      return sb.toString();
+	}
 	
 	
 }
