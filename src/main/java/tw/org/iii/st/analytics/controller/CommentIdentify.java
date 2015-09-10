@@ -38,22 +38,41 @@ public class CommentIdentify
 	private @ResponseBody
 	List<String> startIdentify(@RequestBody String comment)
 	{
-		String segResult = segmentation(comment);
-		System.out.println(segResult);
+		//System.out.println(comment.replaceAll("<.+?>", ","));
+		String segResult = segmentation(comment.replaceAll("<.+?>", ","));
+		
+		String spl[] = segResult.split("\\|"),poi[];
+		
+		//System.out.println(segResult);
+		
 		List<String> poiId = new ArrayList<String>();
-		for (String t : terms.keySet())
+		
+		for (String s : spl)
 		{
-			if (comment.contains(t))
+//			System.out.println(s);
+			if (terms.containsKey(s))
 			{
-				if (!poiId.contains(terms.get(t)))
-				{
-					String spl[] = terms.get(t).split(";");
-					for (String id : spl)
-						poiId.add(id);
-				}
-					
+				poi = terms.get(s).split(";");
+				for (String id : poi)
+					poiId.add(id);
 			}
 		}
+		
+		
+		
+//		for (String t : terms.keySet())
+//		{
+//			if (comment.contains(t))
+//			{
+//				if (!poiId.contains(terms.get(t)))
+//				{
+//					String spl[] = terms.get(t).split(";");
+//					for (String id : spl)
+//						poiId.add(id);
+//				}
+//					
+//			}
+//		}
 		return poiId;
 	}
 	private String segmentation(String comment)
@@ -77,7 +96,6 @@ public class CommentIdentify
 	            e.printStackTrace();
 	      }
 
-	      System.out.println(sb.toString());
 	      return sb.toString();
 	}
 	

@@ -178,12 +178,19 @@ public class Application extends SpringBootServletInitializer {
     @Bean(name = "loadDic")
     public Seg loadDic() {
         System.out.println("init loadDic");
+        HashMap<String, String> terms = readTerms();
+        StringBuilder sb = new StringBuilder();
+        for (String t : terms.keySet())
+        	sb.append(t + "\n");
+      
         Dictionary dic = Dictionary.getInstance();
 
-        String exampleString = "隨意鳥地方\n12咖啡\n";//p[0].substring(0,p[0].lastIndexOf("\\")) + "\\" + "word.dic";
+//        String exampleString = "隨意鳥地方\n12咖啡\n";//p[0].substring(0,p[0].lastIndexOf("\\")) + "\\" + "word.dic";
+        String exampleString = sb.toString();
+       // System.out.println(exampleString);
         try {
             InputStream stream = new ByteArrayInputStream(exampleString.getBytes(StandardCharsets.UTF_8));
-            System.out.println(exampleString.getBytes(StandardCharsets.UTF_8));
+            //System.out.println(exampleString.getBytes(StandardCharsets.UTF_8));
             Dictionary.load(stream, new WordsFileLoading(dic.getDict()));
 
         } catch (Exception e) {
@@ -205,7 +212,7 @@ public class Application extends SpringBootServletInitializer {
         }
 
         public void row(String line, int n) {
-            System.out.println(line);
+            //System.out.println(line);
             if (line.length() < 2) {
                 return;
             }
