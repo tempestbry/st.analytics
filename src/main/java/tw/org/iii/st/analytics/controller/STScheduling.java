@@ -456,6 +456,7 @@ public class STScheduling
 					if (candi.size()==0)
 					{
 						result.addAll(fillCounty(result.get(result.size()-1),now.size()-j,region,result));
+						break;
 					}
 					else
 					{
@@ -683,17 +684,17 @@ public class STScheduling
 //			dateStr = (start.getYear()+1900) + "-" + (start.getMonth()<10 ? "0" + start.getMonth() : start.getMonth()) + "-" + (start.getDay()<10 ? "0" + start.getDay() : start.getDay()) + " 08:30:00";
 		case -1:
 			start = addTime(start,-30); //開始時間
-			end = addTime(start,720); //結束時間
+			end = addTime(start,660); //結束時間
 			break;
 		case 0:
-			end = addTime(start,720); //結束時間
+			end = addTime(start,660); //結束時間
 			break;
 		case 1:
 			start = addTime(start,30); //開始時間
-			end = addTime(start,720); //結束時間
+			end = addTime(start,660); //結束時間
 			break;
 		default:
-			end = addTime(start,720); //結束時間
+			end = addTime(start,660); //結束時間
 			break;
 		}
 		
@@ -708,7 +709,7 @@ public class STScheduling
 		int index=0;
 		for (String t : tourCity) //每一天的行程
 		{
-			//System.out.println(t);
+			boolean eatTime = false;
 			freeTime = ori_start;
 			ArrayList<String> repeat = new ArrayList<String>();
 			String spl[] = t.split("\\+");
@@ -717,9 +718,14 @@ public class STScheduling
 				tourResult.add(index++,FindTop(t,pre,start));
 				repeat.add(tourResult.get(index-1).getPoiId());
 				freeTime = tourResult.get(index-1).getEndTime();
+				
 				while (FreeTime(freeTime,end) >= 1)
 				{
-					tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat));
+					if (freeTime.getHours()>=11 && freeTime.getHours()<13)
+						eatTime = true;
+					else
+						eatTime = false;
+					tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,eatTime));
 					index++;
 					repeat.add(tourResult.get(index-1).getPoiId());
 					freeTime = tourResult.get(index-1).getEndTime();
@@ -737,7 +743,11 @@ public class STScheduling
 						freeTime = tourResult.get(index-1).getEndTime();
 						while (FreeTime(freeTime,end) >= (12-(4*i)))
 						{
-							tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat));
+							if (freeTime.getHours()>=11 && freeTime.getHours()<13)
+								eatTime = true;
+							else
+								eatTime = false;
+							tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,eatTime));
 							index++;
 							repeat.add(tourResult.get(index-1).getPoiId());
 							freeTime = tourResult.get(index-1).getEndTime();
@@ -755,7 +765,11 @@ public class STScheduling
 					freeTime = tourResult.get(index-1).getEndTime();
 					while (FreeTime(freeTime,end) >= 1)
 					{
-						tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat));
+						if (freeTime.getHours()>=11 && freeTime.getHours()<13)
+							eatTime = true;
+						else
+							eatTime = false;
+						tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,eatTime));
 						index++;
 						repeat.add(tourResult.get(index-1).getPoiId());
 						freeTime = tourResult.get(index-1).getEndTime();
@@ -766,6 +780,12 @@ public class STScheduling
 			start = ori_start;
 			freeTime = ori_start;
 			end = addTime(end,1440);
+		}
+		for (String ci : tourCity)
+			System.out.println(ci);
+		for (TourEvent te : tourResult)
+		{
+			System.out.println(te.getPoiId() + " : " + te.getStartTime());
 		}
 		
 		return tourResult;
@@ -897,7 +917,7 @@ public class STScheduling
 	
 	
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-	private TourEvent otherPOI(TourEvent before,String pre,int type,ArrayList<String> repeat)
+	private TourEvent otherPOI(TourEvent before,String pre,int type,ArrayList<String> repeat,boolean eatTime)
 	{
 		int value = 50000;
 		List<Map<String, Object>> result;
@@ -914,10 +934,13 @@ public class STScheduling
 					{
 						poi.setPoiId(r.get("arrival_id").toString());
 						try{
-							poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(result.get(0).get("time").toString())));
-							double stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type * 30);
-							if (stay==30)
-								stay+=30;
+							if (!eatTime)
+								poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(result.get(0).get("time").toString())));
+							else
+								poi.setStartTime(addTime(addTime(before.getEndTime(),120),Double.parseDouble(result.get(0).get("time").toString())));
+							double stay = /*Double.parseDouble(result.get(0).get("stay_time").toString())*/90 + (type * 30);
+//							if (stay==30)
+//								stay+=30;
 							poi.setEndTime(addTime(poi.getStartTime(),stay));
 						}catch (Exception e){e.printStackTrace();}
 						break;
