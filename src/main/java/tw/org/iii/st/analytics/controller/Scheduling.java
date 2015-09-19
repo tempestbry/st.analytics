@@ -185,7 +185,16 @@ public class Scheduling {
 		List<TourEvent> tourResult = new ArrayList<TourEvent>();
 		Date freeTime = json.getStartTime();
 		ArrayList<String> repeat = new ArrayList<String>();
-
+		if (json.getCityList().get(0).equals("all"))
+		{
+			List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
+			List<String> c = new ArrayList<String>();
+			c.add(result.get(0).get("county").toString());
+			json.setCityList(c);
+		}
+		
+		
+		
 		String pre = getPre(json.getPreferenceList());
 		int index=0;
 		if (json.getGps()==null)
@@ -197,11 +206,11 @@ public class Scheduling {
 		System.out.println(freeTime);
 		while (FreeTime(freeTime,json.getEndTime()) >= 1)
 		{
-			System.out.println(freeTime);
 			tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,false));
 			index++;
 			repeat.add(tourResult.get(index-1).getPoiId());
 			freeTime = tourResult.get(index-1).getEndTime();
+			System.out.println(freeTime);
 		}
 		
 		return tourResult;
