@@ -166,7 +166,6 @@ public class Scheduling {
 		}
 		else if ((diffHours) < 11)
 		{
-			System.out.println("one day");
 			finalResult = OneDayScheduling(json);
 			return finalResult;
 		}
@@ -189,12 +188,16 @@ public class Scheduling {
 
 		String pre = getPre(json.getPreferenceList());
 		int index=0;
-		tourResult.add(index++,findTopNear(json,pre));
+		if (json.getGps()==null)
+			tourResult.add(index++,FindTop(json.getCityList().get(0),pre,json.getStartTime()));
+		else
+			tourResult.add(index++,findTopNear(json,pre));
 		repeat.add(tourResult.get(index-1).getPoiId());
 		freeTime = tourResult.get(index-1).getEndTime();
-			
+		System.out.println(freeTime);
 		while (FreeTime(freeTime,json.getEndTime()) >= 1)
 		{
+			System.out.println(freeTime);
 			tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,false));
 			index++;
 			repeat.add(tourResult.get(index-1).getPoiId());
