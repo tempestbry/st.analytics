@@ -58,12 +58,10 @@ public class Scheduling {
 	
 	@RequestMapping("/QuickPlan")
 	private @ResponseBody
-	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException {
+	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
 
 		List<TourEvent> finalResult = new ArrayList<TourEvent>();
 		
-	    Date d1 = null;
-	    Date d2 = null;
 	    
 	    long diff = json.getEndTime().getTime()-json.getStartTime().getTime();
 	    long diffHours = diff / (60 * 60 * 1000);		
@@ -180,17 +178,37 @@ public class Scheduling {
 		
 		
 	}
-	private List<TourEvent> OneDayScheduling(SchedulingInput json) throws ParseException
+	private List<TourEvent> OneDayScheduling(SchedulingInput json) throws ParseException, IOException
 	{
 		List<TourEvent> tourResult = new ArrayList<TourEvent>();
 		Date freeTime = json.getStartTime();
 		ArrayList<String> repeat = new ArrayList<String>();
 		if (json.getCityList().get(0).equals("all"))
 		{
-			List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
-			List<String> c = new ArrayList<String>();
-			c.add(result.get(0).get("county").toString());
-			json.setCityList(c);
+			if (json.getGps()==null)
+			{
+				List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
+				List<String> c = new ArrayList<String>();
+				c.add(result.get(0).get("county").toString());
+				json.setCityList(c);
+			}
+			else
+			{
+				List<String> c = new ArrayList<String>();
+				String cc = askGoogle_all(json.getGps().getLng(), json.getGps().getLat());
+				if (cc.equals("all"))
+				{
+					List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
+					c.add(result.get(0).get("county").toString());
+					json.setCityList(c);
+				}
+				else
+				{
+					c.add(cc);
+					json.setCityList(c);
+				}
+
+			}
 		}
 		
 		
@@ -215,6 +233,40 @@ public class Scheduling {
 		
 		return tourResult;
 
+	}
+	private String askGoogle_all(double px,double py) throws IOException
+	{
+		try
+		{
+			HashMap<String,String> county = new HashMap<String,String>();
+			List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT id,name FROM County");
+			for (Map<String, Object> i : rs) 
+				county.put(i.get("name").toString().replace("臺", "台"), i.get("id").toString());
+			
+			String html = request("http://maps.google.com/maps/api/geocode/json?latlng="+py+","+px+"&language=zh-TW&sensor=true","UTF-8");
+			
+			Pattern p = Pattern.compile("\"long_name\" : \".{2}[縣市]\","); 
+			Matcher m = p.matcher(html);
+			
+			String city="";
+			if (m.find())
+			{
+				city = Parser(m.group(),"\"long_name\" : \"","\",",1);
+				if (!county.containsKey(city))
+					return "all";
+				else
+					return county.get(city);
+			}
+			else
+			{
+				return "all";
+			}
+		}
+		catch (Exception e)
+		{
+			return "all";
+		}
+		
 	}
 	private TourEvent findTopNear(SchedulingInput json,String pre) throws ParseException
 	{
