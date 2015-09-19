@@ -50,7 +50,6 @@ public class Scheduling {
 	@Qualifier("analyticsJdbcTemplate")
 	private JdbcTemplate analyticsjdbc;
 	
-	
 	@Autowired
 	@Qualifier("STScheduling")
 	private STScheduling stScheduling;
@@ -62,8 +61,17 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException {
 
 		List<TourEvent> finalResult = new ArrayList<TourEvent>();
+		
+	    Date d1 = null;
+	    Date d2 = null;
+	    
+	    long diff = json.getEndTime().getTime()-json.getStartTime().getTime();
+	    long diffHours = diff / (60 * 60 * 1000);		
+
+
 		if (json.getCityList().size()==1 && json.getCityList().get(0).contains("TW18"))
 		{
+			System.out.println("hualien");
 			//行程規劃結果
 			ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
 			int lastTime;
@@ -156,9 +164,16 @@ public class Scheduling {
 			
 			return finalResult;
 		}
+		else if ((diffHours) < 11)
+		{
+			System.out.println("one day");
+			finalResult = OneDayScheduling(json);
+			return finalResult;
+		}
 		else
 		{
 //			
+			System.out.println("multi day");
 			finalResult = stScheduling.scheduling(json);
 			return finalResult;
 			//return null;
@@ -166,6 +181,239 @@ public class Scheduling {
 		
 		
 	}
+	private List<TourEvent> OneDayScheduling(SchedulingInput json) throws ParseException
+	{
+		List<TourEvent> tourResult = new ArrayList<TourEvent>();
+		Date freeTime = json.getStartTime();
+		ArrayList<String> repeat = new ArrayList<String>();
+
+		String pre = getPre(json.getPreferenceList());
+		int index=0;
+		tourResult.add(index++,findTopNear(json,pre));
+		repeat.add(tourResult.get(index-1).getPoiId());
+		freeTime = tourResult.get(index-1).getEndTime();
+			
+		while (FreeTime(freeTime,json.getEndTime()) >= 1)
+		{
+			tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,false));
+			index++;
+			repeat.add(tourResult.get(index-1).getPoiId());
+			freeTime = tourResult.get(index-1).getEndTime();
+		}
+		
+		return tourResult;
+
+	}
+	private TourEvent findTopNear(SchedulingInput json,String pre) throws ParseException
+	{
+		List<Map<String, Object>> result;
+		TourEvent poi = new TourEvent();
+		int value = 100000;
+		double time;
+		boolean flag = false;
+		do
+		{
+			result = analyticsjdbc.queryForList("SELECT poiId,stay_time,location FROM st_scheduling WHERE county = '"+json.getCityList().get(0)+"' and preference in ("+pre+") and checkins >= "+value+" order by rand()");
+			if (result.size()>0)
+			{
+				for (Map<String, Object> r : result)
+				{
+					String[] location = r.get("location").toString().split("\\(|\\)| ");
+					double latitude = Double.parseDouble(location[1]);
+					double longitude = Double.parseDouble(location[2]);
+					time = (int)(Distance(latitude,longitude,json.getGps().getLat(),json.getGps().getLng()) / 0.75);
+					if (time<=30)
+					{
+						poi.setPoiId(result.get(0).get("poiId").toString());
+						poi.setStartTime(json.getStartTime());
+						try{
+							poi.setEndTime(addTime(json.getStartTime(),Double.parseDouble(result.get(0).get("stay_time").toString())));
+						}catch (Exception e){e.printStackTrace();}
+						flag = true;
+						break;
+					}
+				}
+				if (flag)
+					break;
+			}
+			value-=10000;
+		}while (poi.getPoiId()==null && value>=0);
+		
+		if (flag)
+			return poi;
+		else
+			return FindTop(json.getCityList().get(0),pre,json.getStartTime());
+		
+	}
+	
+	
+	private TourEvent otherPOI(TourEvent before,String pre,int type,ArrayList<String> repeat,boolean eatTime) throws ParseException
+	{
+		int value = 50000;
+		List<Map<String, Object>> result;
+		TourEvent poi = new TourEvent();
+		
+		do
+		{
+			result = analyticsjdbc.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' and checkins >= "+value+" and time <=40 and preference in ("+pre+") ORDER BY rand() limit 0,20");
+			if (result.size()>0)
+			{
+				for (Map<String, Object> r : result)
+				{
+					if (!repeat.contains(r.get("arrival_id").toString()))
+					{
+						poi.setPoiId(r.get("arrival_id").toString());
+						try{
+							if (!eatTime)
+								poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(result.get(0).get("time").toString())));
+							else
+								poi.setStartTime(addTime(addTime(before.getEndTime(),120),Double.parseDouble(result.get(0).get("time").toString())));
+							double stay = /*Double.parseDouble(result.get(0).get("stay_time").toString())*/90 + (type * 30);
+//							if (stay==30)
+//								stay+=30;
+							poi.setEndTime(addTime(poi.getStartTime(),stay));
+						}catch (Exception e){e.printStackTrace();}
+						break;
+					}
+					
+				}
+				if (poi.getPoiId()!=null)
+					break;
+			}
+			value-=10000;
+		}while (("".equals(poi.getPoiId()) || poi.getPoiId()==null) && value>=0);
+		
+		if ("".equals(poi.getPoiId()) || poi.getPoiId()==null) //上面條件都沒符合的
+		{
+			result = analyticsjdbc.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' ORDER BY time limit 0,20");	
+			for (Map<String, Object> r : result)
+			{
+				if (!repeat.contains(r.get("arrival_id").toString()))
+				{
+					poi.setPoiId(r.get("arrival_id").toString());
+					try{
+						poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(result.get(0).get("time").toString())));
+						double stay = /*Double.parseDouble(result.get(0).get("stay_time").toString())*/90 + (type * 30);
+//						if (stay==30)
+//							stay+=30;
+						poi.setEndTime(addTime(poi.getStartTime(),stay));
+					}catch (Exception e){e.printStackTrace();}
+					break;
+				}
+				if (poi.getPoiId()!=null)
+					break;
+			}
+		}
+		if (poi.getPoiId()==null) //莫名其妙的掛了
+		{
+//			result = analyticsjdbc.queryForList("SELECT county FROM st_scheduling WHERE poiId = '"+before.getPoiId()+"'");	
+			result = analyticsjdbc.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '"+result.get(0).get("county").toString()+"' ORDER BY rand()");
+			for (Map<String, Object> r : result)
+			{
+				if (!repeat.contains(r.get("poiId").toString()))
+				{
+					List<Map<String, Object>> result1 = analyticsjdbc.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE poiId = '"+before.getPoiId()+"'");
+					String[] location = r.get("location").toString().split("\\(|\\)| ");
+					double latitude = Double.parseDouble(location[1]);
+					double longitude = Double.parseDouble(location[2]);
+					
+					location = result1.get(0).get("location").toString().split("\\(|\\)| ");
+					double latitude1 = Double.parseDouble(location[1]);
+					double longitude1 = Double.parseDouble(location[2]);
+				
+					double time;
+					try
+					{
+						time = (int)(Distance(latitude,longitude,latitude1,longitude1) / 0.75);
+					}
+					catch (Exception e)
+					{
+						time = 30;
+					}
+					poi.setPoiId(r.get("poiId").toString());
+					poi.setStartTime(addTime(before.getEndTime(),time));
+					poi.setEndTime(addTime(poi.getStartTime(),60));
+				}
+			}
+		}
+		
+		return poi;
+	}
+	private String getPre(List<String> pre)
+	{
+		String str="";
+		for (int i=0;i<pre.size()-1;i++)
+		{
+			str+="'" + pre.get(i) + "',";
+		}
+		str+="'" + pre.get(pre.size()-1) + "'";
+		
+		return str;
+	}
+	private TourEvent FindTop(String city,String pre,Date startTime) throws ParseException
+	{
+		
+		int value = 100000;
+		List<Map<String, Object>> result;
+		TourEvent poi = new TourEvent();
+		do
+		{
+			result = analyticsjdbc.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' and preference in ("+pre+") and checkins >= "+value+" order by rand() limit 0,1");
+			if (result.size()>0)
+			{
+				poi.setPoiId(result.get(0).get("poiId").toString());
+				poi.setStartTime(startTime);
+				try{
+					poi.setEndTime(addTime(startTime,Double.parseDouble(result.get(0).get("stay_time").toString())));
+				}catch (Exception e){e.printStackTrace();}
+				break;
+			}
+				
+	
+			value-=10000;
+		}while (poi.getPoiId()==null && value>=0);
+	
+		if (poi.getPoiId()==null)
+		{
+			result = analyticsjdbc.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' order by rand() limit 0,1");
+			if (result.size()>0)
+			{
+				poi.setPoiId(result.get(0).get("poiId").toString());
+				poi.setStartTime(startTime);
+				try{
+					poi.setEndTime(addTime(startTime,Double.parseDouble(result.get(0).get("stay_time").toString())));
+				}catch (Exception e)
+				{
+					poi.setEndTime(addTime(startTime,60));
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		return poi;
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+	
 	private String getPreference(List<String> p,HashMap<String,String> mapping)
 	{
 		String preference="";
