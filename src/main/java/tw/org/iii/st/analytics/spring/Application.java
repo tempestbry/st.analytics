@@ -201,6 +201,26 @@ public class Application extends SpringBootServletInitializer {
         return seg;
     }
 
+    @Bean(name = "poiNames")
+    public HashMap<String,String> poiNames()
+    {
+    	  JdbcTemplate analytics = null;
+          try {
+              analytics = new JdbcTemplate(dataSourceAnalytics());
+          } catch (PropertyVetoException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
+          }
+    	List<Map<String, Object>> result = analytics.queryForList("SELECT poiId,Name FROM st_scheduling");
+		HashMap<String,String> poi = new HashMap<String,String>();
+		for (Map<String, Object> r : result)
+		{
+			poi.put(r.get("poiId").toString(),r.get("Name").toString());
+		}
+
+		return poi;
+    }
+    
     private static class WordsFileLoading implements FileLoading {
         final Map<Character, CharNode> dic;
 

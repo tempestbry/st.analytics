@@ -56,13 +56,17 @@ public class Scheduling {
 	
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	
+	
 	@RequestMapping("/QuickPlan")
 	private @ResponseBody
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
 
 		List<TourEvent> finalResult = new ArrayList<TourEvent>();
 		
-	    
+		
+		
+		
+		
 	    long diff = json.getEndTime().getTime()-json.getStartTime().getTime();
 	    long diffHours = diff / (60 * 60 * 1000);		
 
@@ -528,7 +532,7 @@ public class Scheduling {
 		cal.setTime(date);		
 
 		// 找出Top (打卡數>30000, 星期幾跟時段要符合, 偏好, 縣市, 經緯度不為0 or null取40個景點候選做random)
-		List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT A.place_id,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and A.checkins > 30000 and B.weekday = '"
+		List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT A.place_id,px,py,stay_time FROM scheduling AS A,OpenTimeArray AS B WHERE A.place_id = B.place_id and A.checkins > 10000 and B.weekday = '"
 				+ ti.weekday
 				+ "' and "
 				+ date.getHours()

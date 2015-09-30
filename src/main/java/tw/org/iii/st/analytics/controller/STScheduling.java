@@ -662,6 +662,22 @@ public class STScheduling
 		return tmp;
 	}
 	
+	@Autowired
+	@Qualifier("poiNames")
+	private HashMap<String,String> poiNames;
+//	private HashMap<String,String> getName()
+//	{
+//		List<Map<String, Object>> result = analytics.queryForList("SELECT poiId,Name FROM st_scheduling");
+//		HashMap<String,String> poi = new HashMap<String,String>();
+//		for (Map<String, Object> r : result)
+//		{
+//			poi.put(r.get("poiId").toString(),r.get("Name").toString());
+//		}
+//
+//		return poi;
+//	}
+	
+	
 	/**開始每一天的行程規劃*/
 	private List<TourEvent> startPlan(ArrayList<String> tourCity,SchedulingInput json) throws ParseException
 	{
@@ -706,17 +722,26 @@ public class STScheduling
 		
 		List<TourEvent> tourResult = new ArrayList<TourEvent>();		
 		
+		int startIndex=0;
+		
 		int index=0;
+		ArrayList<String> repeat = new ArrayList<String>();
 		for (String t : tourCity) //每一天的行程
 		{
+			System.out.println("City : " + t);
+			
 			boolean eatTime = false;
 			freeTime = ori_start;
-			ArrayList<String> repeat = new ArrayList<String>();
+			
 			String spl[] = t.split("\\+");
-			if (!group.containsKey(t)) //該縣市是否有必去景點
+			if (!mustCounty(spl,group)) //該縣市是否有必去景點
 			{
-				tourResult.add(index++,FindTop(t,pre,start));
+				tourResult.add(index++,FindTop(t,pre,start,repeat,json.getLooseType()));
+				
+				//Id跟名稱同時過濾
 				repeat.add(tourResult.get(index-1).getPoiId());
+				repeat.add(poiNames.get(tourResult.get(index-1).getPoiId()));
+				System.out.println(poiNames.get(tourResult.get(index-1).getPoiId()));
 				freeTime = tourResult.get(index-1).getEndTime();
 				
 				while (FreeTime(freeTime,end) >= 1)
@@ -727,7 +752,11 @@ public class STScheduling
 						eatTime = false;
 					tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,eatTime));
 					index++;
+					
+					//Id跟名稱同時過濾
 					repeat.add(tourResult.get(index-1).getPoiId());
+					repeat.add(poiNames.get(tourResult.get(index-1).getPoiId()));
+					System.out.println(poiNames.get(tourResult.get(index-1).getPoiId()));
 					freeTime = tourResult.get(index-1).getEndTime();
 				}
 			}
@@ -737,9 +766,16 @@ public class STScheduling
 				{
 					for (int i=1;i<=spl.length;i++) //每一個縣市
 					{						
-						tourResult.addAll(MustResult(group.get(spl[i-1]),start));
+						if (group.containsKey(spl[i-1]))
+							tourResult.addAll(MustResult(group.get(spl[i-1]),start,json.getLooseType()));
+						else
+							tourResult.add(FindTop(spl[i-1],pre,start,repeat,json.getLooseType()));
 						index=tourResult.size();
+						
+						//Id跟名稱同時過濾
 						repeat.add(tourResult.get(index-1).getPoiId());
+						repeat.add(poiNames.get(tourResult.get(index-1).getPoiId()));
+						System.out.println(poiNames.get(tourResult.get(index-1).getPoiId()));
 						freeTime = tourResult.get(index-1).getEndTime();
 						while (FreeTime(freeTime,end) >= (12-(4*i)))
 						{
@@ -749,7 +785,11 @@ public class STScheduling
 								eatTime = false;
 							tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,eatTime));
 							index++;
+							
+							//Id跟名稱同時過濾
 							repeat.add(tourResult.get(index-1).getPoiId());
+							repeat.add(poiNames.get(tourResult.get(index-1).getPoiId()));
+							System.out.println(poiNames.get(tourResult.get(index-1).getPoiId()));
 							freeTime = tourResult.get(index-1).getEndTime();
 						}
 						start = addTime(tourResult.get(index-1).getEndTime(),60);
@@ -759,9 +799,13 @@ public class STScheduling
 				}
 				else //一個縣市
 				{
-					tourResult.addAll(MustResult(group.get(spl[0]),start));
+					tourResult.addAll(MustResult(group.get(spl[0]),start,json.getLooseType()));
 					index=tourResult.size();
+					
+					//Id跟名稱同時過濾
 					repeat.add(tourResult.get(index-1).getPoiId());
+					repeat.add(poiNames.get(tourResult.get(index-1).getPoiId()));
+					System.out.println(poiNames.get(tourResult.get(index-1).getPoiId()));
 					freeTime = tourResult.get(index-1).getEndTime();
 					while (FreeTime(freeTime,end) >= 1)
 					{
@@ -771,32 +815,51 @@ public class STScheduling
 							eatTime = false;
 						tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,eatTime));
 						index++;
+						
+						//Id跟名稱同時過濾
 						repeat.add(tourResult.get(index-1).getPoiId());
+						repeat.add(poiNames.get(tourResult.get(index-1).getPoiId()));
+						System.out.println(poiNames.get(tourResult.get(index-1).getPoiId()));
 						freeTime = tourResult.get(index-1).getEndTime();
+						
 					}
 				}
 			}
+//			for (int si = startIndex;si<index;si++)
+//			{
+//				System.out.println(poiNames.get(tourResult.get(si).getPoiId()));
+//			}
+			startIndex = index;
 			ori_start = addTime(ori_start,1440);
 			start = ori_start;
 			freeTime = ori_start;
 			end = addTime(end,1440);
 		}
-		for (String ci : tourCity)
-			System.out.println(ci);
-		for (TourEvent te : tourResult)
-		{
-			System.out.println(te.getPoiId() + " : " + te.getStartTime());
-		}
+//		for (String ci : tourCity)
+//			System.out.println(ci);
+//		for (TourEvent te : tourResult)
+//		{
+//			System.out.println(te.getPoiId() + " : " + te.getStartTime());
+//		}
 		
 		return tourResult;
 		
+	}
+	private boolean mustCounty(String spl[],HashMap<String,ArrayList<String>> group)
+	{
+		for (String s : spl)
+		{
+			if (group.containsKey(s))
+				return true;
+		}
+		return false;
 	}
 	private class must
 	{
 		int stay_time;
 		int time;
 	}
-	private List<TourEvent> MustResult(ArrayList<String> poi,Date start) throws ParseException
+	private List<TourEvent> MustResult(ArrayList<String> poi,Date start,int type) throws ParseException
 	{
 		List<TourEvent> tour = new ArrayList<TourEvent>();
 		if (poi.size()==1)
@@ -822,6 +885,8 @@ public class STScheduling
 		}
 		query = query.substring(0,query.lastIndexOf(" and"));
 		
+		int stay;
+		
 		HashMap<String,HashMap<String,must>> poiInfo = new HashMap<String,HashMap<String,must>>();
 		List<Map<String, Object>> result = analytics.queryForList("SELECT id,arrival_id,time,stay_time FROM euclid_distance_0826 WHERE "+query+"");
 		for (Map<String, Object> r : result) //取得兩兩景點之間的時間與停留時間
@@ -830,7 +895,15 @@ public class STScheduling
 			{
 				HashMap<String,must> tmp = new HashMap<String,must>();
 				must m = new must();
-				m.stay_time = (int)r.get("stay_time");
+				try
+				{
+					stay = (int)r.get("stay_time") + (type*30);
+				}
+				catch (Exception e)
+				{
+					stay = 90 + (type*30);
+				}
+				m.stay_time = stay;
 				m.time = (int)r.get("time");
 				tmp.put(r.get("arrival_id").toString(), m);
 				poiInfo.put(r.get("id").toString(),tmp);
@@ -838,7 +911,15 @@ public class STScheduling
 			else
 			{
 				must m = new must();
-				m.stay_time = (int)r.get("stay_time");
+				try
+				{
+					stay = (int)r.get("stay_time") + (type*30);
+				}
+				catch (Exception e)
+				{
+					stay = 90 + (type*30);
+				}
+				m.stay_time = stay;
 				m.time = (int)r.get("time");
 				poiInfo.get(r.get("id").toString()).put(r.get("arrival_id").toString(), m);
 			}
@@ -875,7 +956,7 @@ public class STScheduling
 			{
 				Date end = tour.get(tour.size()-1).getEndTime();
 				double time = poiInfo.get(tour.get(tour.size()-1).getPoiId()).get(m).time;
-				double stay = poiInfo.get(tour.get(tour.size()-1).getPoiId()).get(m).stay_time;
+				stay = poiInfo.get(tour.get(tour.size()-1).getPoiId()).get(m).stay_time;
 				t.setStartTime(addTime(end,time));
 				t.setEndTime(addTime(t.getStartTime(),stay));
 			}
@@ -919,18 +1000,18 @@ public class STScheduling
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	private TourEvent otherPOI(TourEvent before,String pre,int type,ArrayList<String> repeat,boolean eatTime)
 	{
-		int value = 50000;
+		int value = 50000,time_value = 15;
 		List<Map<String, Object>> result;
 		TourEvent poi = new TourEvent();
-		
+		double stay;
 		do
 		{
-			result = analytics.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' and checkins >= "+value+" and time <=40 and preference in ("+pre+") ORDER BY rand() limit 0,20");
+			result = analytics.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' and checkins >= "+value+" and time <="+time_value+" and preference in ("+pre+") ORDER BY rand() limit 0,20");
 			if (result.size()>0)
 			{
 				for (Map<String, Object> r : result)
 				{
-					if (!repeat.contains(r.get("arrival_id").toString()))
+					if (!repeat.contains(r.get("arrival_id").toString()) && !repeat.contains(poiNames.get(r.get("arrival_id").toString())) && !poiNames.get(r.get("arrival_id")).contains("夜市"))
 					{
 						poi.setPoiId(r.get("arrival_id").toString());
 						try{
@@ -938,9 +1019,19 @@ public class STScheduling
 								poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(result.get(0).get("time").toString())));
 							else
 								poi.setStartTime(addTime(addTime(before.getEndTime(),120),Double.parseDouble(result.get(0).get("time").toString())));
-							double stay = /*Double.parseDouble(result.get(0).get("stay_time").toString())*/90 + (type * 30);
-//							if (stay==30)
-//								stay+=30;
+							//double stay = /*Double.parseDouble(result.get(0).get("stay_time").toString())*/90 + (type * 30);
+							try
+							{
+								stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type * 30);
+							}
+							catch (Exception e)
+							{
+								e.printStackTrace();
+								stay = 90 + (type * 30);
+							}
+							
+							if (stay<30) //停留時間低於半小時以半小時計
+								stay = 30;
 							poi.setEndTime(addTime(poi.getStartTime(),stay));
 						}catch (Exception e){e.printStackTrace();}
 						break;
@@ -950,6 +1041,7 @@ public class STScheduling
 				if (poi.getPoiId()!=null)
 					break;
 			}
+			time_value+=5;
 			value-=10000;
 		}while (("".equals(poi.getPoiId()) || poi.getPoiId()==null) && value>=0);
 		
@@ -958,12 +1050,20 @@ public class STScheduling
 			result = analytics.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' ORDER BY time limit 0,20");	
 			for (Map<String, Object> r : result)
 			{
-				if (!repeat.contains(r.get("arrival_id").toString()))
+				if (!repeat.contains(r.get("arrival_id").toString()) && !repeat.contains(poiNames.get(r.get("arrival_id").toString())) && !poiNames.get(r.get("arrival_id")).contains("夜市"))
 				{
 					poi.setPoiId(r.get("arrival_id").toString());
 					try{
 						poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(result.get(0).get("time").toString())));
-						double stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type * 30);
+						try
+						{
+							stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type * 30);
+						}
+						catch (Exception e)
+						{
+							e.printStackTrace();
+							stay = 90 + (type * 30);
+						}
 						if (stay==30)
 							stay+=30;
 						poi.setEndTime(addTime(poi.getStartTime(),stay));
@@ -980,7 +1080,7 @@ public class STScheduling
 			result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '"+result.get(0).get("county").toString()+"' ORDER BY rand()");
 			for (Map<String, Object> r : result)
 			{
-				if (!repeat.contains(r.get("poiId").toString()))
+				if (!repeat.contains(r.get("poiId").toString()) && !repeat.contains(poiNames.get(r.get("poiId").toString())) && !poiNames.get(r.get("poiId")).contains("夜市"))
 				{
 					List<Map<String, Object>> result1 = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE poiId = '"+before.getPoiId()+"'");
 					String[] location = r.get("location").toString().split("\\(|\\)| ");
@@ -1031,42 +1131,68 @@ public class STScheduling
 		
 		return str;
 	}
-	private TourEvent FindTop(String city,String pre,Date startTime)
+	private TourEvent FindTop(String city,String pre,Date startTime,ArrayList<String> repeat,int type)
 	{
 		
 		int value = 100000;
 		List<Map<String, Object>> result;
 		TourEvent poi = new TourEvent();
+		boolean flag = false;
+		double stay;
 		do
 		{
-			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' and preference in ("+pre+") and checkins >= "+value+" order by rand() limit 0,1");
-			if (result.size()>0)
+			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' and preference in ("+pre+") and checkins >= "+value+" order by rand()");
+			for (Map<String, Object> r : result)
 			{
-				poi.setPoiId(result.get(0).get("poiId").toString());
-				poi.setStartTime(startTime);
-				try{
-					poi.setEndTime(addTime(startTime,Double.parseDouble(result.get(0).get("stay_time").toString())));
-				}catch (Exception e){e.printStackTrace();}
-				break;
+				if (!repeat.contains(r.get("poiId")) && !repeat.contains(poiNames.get(r.get("poiId"))) && !poiNames.get(r.get("poiId")).contains("夜市"))
+				{
+					if (poiNames.get(r.get("poiId")).contains("夜市"))
+						System.out.println("why");
+					poi.setPoiId(result.get(0).get("poiId").toString());
+					poi.setStartTime(startTime);
+					
+					try
+					{
+						stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type*30);
+					}
+					catch (Exception e)
+					{
+						stay = 90 + (type*30);
+					}
+					
+					try{
+						poi.setEndTime(addTime(startTime,stay));
+					}catch (Exception e){e.printStackTrace();}
+					flag = true;
+					break;
+				}
 			}
-				
-
+			if (flag)
+				break;
 			value-=10000;
 		}while (poi.getPoiId()==null && value>=0);
 
 		if (poi.getPoiId()==null)
 		{
-			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' order by rand() limit 0,1");
-			if (result.size()>0)
+			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' order by rand()");
+			for (Map<String, Object> r : result)
 			{
-				poi.setPoiId(result.get(0).get("poiId").toString());
-				poi.setStartTime(startTime);
-				try{
-					poi.setEndTime(addTime(startTime,Double.parseDouble(result.get(0).get("stay_time").toString())));
-				}catch (Exception e)
+				if (!repeat.contains(r.get("poiId")) && ! repeat.contains(poiNames.get(r.get("poiId"))) && !poiNames.get(r.get("poiId")).contains("夜市"))
 				{
-					poi.setEndTime(addTime(startTime,60));
-					e.printStackTrace();
+					poi.setPoiId(result.get(0).get("poiId").toString());
+					poi.setStartTime(startTime);
+					
+					try
+					{
+						stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type*30);
+					}
+					catch (Exception e)
+					{
+						stay = 90 + (type*30);
+					}
+					poi.setEndTime(addTime(startTime,stay));
+					flag = true;
+					break;
 				}
 			}
 		}
