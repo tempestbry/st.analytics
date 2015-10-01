@@ -170,7 +170,7 @@ public class Scheduling {
 			
 			return finalResult;
 		}
-		else if ((diffHours) < 11)
+		else if (json.getCityList().size()==1 && (diffHours) < 11)
 		{
 			finalResult = OneDayScheduling(json);
 			return finalResult;
