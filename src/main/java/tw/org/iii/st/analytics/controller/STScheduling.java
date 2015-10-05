@@ -691,8 +691,8 @@ public class STScheduling
 		String preference="";
 		// 將preference寫入條件
 		for (int i = 0; i < p.size() - 1; i++)
-			preference+="'" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "',";
-		preference+="'" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
+			preference+="'" + (!p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "',";
+		preference+="'" + (!p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
 //			preference += "A.preference = '" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "' or ";
 //		preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
 		
