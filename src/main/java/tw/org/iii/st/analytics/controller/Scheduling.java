@@ -66,11 +66,7 @@ public class Scheduling {
 	List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
 
 		List<TourEvent> finalResult = new ArrayList<TourEvent>();
-		
-		
-		
-		
-		
+
 	    long diff = json.getEndTime().getTime()-json.getStartTime().getTime();
 	    long diffHours = diff / (60 * 60 * 1000);		
 
@@ -194,54 +190,123 @@ public class Scheduling {
 		//確認縣市
 		if (json.getCityList().get(0).equals("all"))
 		{
-			if (json.getGps()==null)
+			if (json.getMustPoiList().size()==0) //沒有必去景點
 			{
-				List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
-				List<String> c = new ArrayList<String>();
-				c.add(result.get(0).get("county").toString());
-				json.setCityList(c);
-			}
-			else
-			{
-				List<String> c = new ArrayList<String>();
-				String cc = askGoogle_all(json.getGps().getLng(), json.getGps().getLat());
-				if (cc.equals("all"))
+				if (json.getGps()==null)
 				{
 					List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
+					List<String> c = new ArrayList<String>();
 					c.add(result.get(0).get("county").toString());
 					json.setCityList(c);
 				}
 				else
 				{
-					c.add(cc);
-					json.setCityList(c);
-				}
+					List<String> c = new ArrayList<String>();
+					String cc = askGoogle_all(json.getGps().getLng(), json.getGps().getLat());
+					if (cc.equals("all"))
+					{
+						List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
+						c.add(result.get(0).get("county").toString());
+						json.setCityList(c);
+					}
+					else
+					{
+						c.add(cc);
+						json.setCityList(c);
+					}
 
+				}
 			}
+			else //有必去景點
+			{
+				List<String> must = json.getMustPoiList();
+				if (must.size()>1) //超過一個must poi
+				{
+					if (distance(must)) //必去景點之間是否差超過100公里
+					{
+						String query = "";
+						for (int i=0;i<must.size()-1;i++)
+							query+="'" + must.get(i) + "',";
+						query += "'" + must.get(must.size()-1) + "'";
+						List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT * FROM st_scheduling WHERE poiId in ("+query+")");
+						Date start = json.getStartTime();
+						for (int i=0;i<result.size();i++)
+						{
+							TourEvent t = new TourEvent();
+							t.setPoiId(result.get(i).get("poiId").toString());
+							t.setStartTime(start);
+							t.setEndTime(addTime(start,(int)result.get(i).get("stay_time")));
+							try
+							{
+								double dis = Euclid_Distance(result.get(i).get("location").toString(),result.get(i).get("location").toString());
+								start = addTime(t.getEndTime(),(dis/0.6));
+							}
+							catch (Exception e)
+							{
+								e.printStackTrace();
+							}
+							tourResult.add(t);
+						}
+						
+						return tourResult;
+					}
+					else
+					{
+						List<String> c = new ArrayList<String>();
+						List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT county FROM st_scheduling WHERE poiId ='"+must.get(0)+"'");
+						c.add(result.get(0).get("county").toString());
+						json.setCityList(c);
+					}
+				}
+			}
+			
 		}
 		
 		
-		
-		String pre = getPre(json.getPreferenceList());
+		HashMap<String,String> mapping = startMapping();
+		String pre = getPreference(json.getPreferenceList(),mapping);
 		int index=0;
-		if (json.getGps()==null)
-			tourResult.add(index++,FindTop(json.getCityList().get(0),pre,json.getStartTime(),json.getLooseType()));
-		else
-			tourResult.add(index++,findTopNear(json,pre,json.getLooseType()));
-		repeat.add(tourResult.get(index-1).getPoiId());
-		freeTime = tourResult.get(index-1).getEndTime();
-		System.out.println(freeTime);
-		while (FreeTime(freeTime,json.getEndTime()) >= 1)
+		if (json.getMustPoiList().size()==0) //沒有必去景點
 		{
-			tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,false));
-			index++;
+			if (json.getGps()==null)
+				tourResult.add(index++,FindTop(json.getCityList().get(0),pre,json.getStartTime(),json.getLooseType()));
+			else
+				tourResult.add(index++,findTopNear(json,pre,json.getLooseType()));
 			repeat.add(tourResult.get(index-1).getPoiId());
 			freeTime = tourResult.get(index-1).getEndTime();
 			System.out.println(freeTime);
+			while (FreeTime(freeTime,json.getEndTime()) >= 1)
+			{
+				tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,false));
+				index++;
+				repeat.add(tourResult.get(index-1).getPoiId());
+				freeTime = tourResult.get(index-1).getEndTime();
+				System.out.println(freeTime);
+			}
 		}
+		else
+		{
+			
+		}
+		
 		
 		return tourResult;
 
+	}
+	private boolean distance(List<String> poi)
+	{
+		List<Map<String, Object>> result;
+		
+		for (int i=0;i<poi.size();i++)
+		{
+			for (int j=i+1;j<poi.size();j++)
+			{
+				result = analyticsjdbc.queryForList("SELECT distance FROM euclid_distance_0826 WHERE id = '"+poi.get(i)+"' and arrival_id = '"+poi.get(j)+"'");
+				if ((int)result.get(0).get("distance")>=100)
+					return true;
+			}
+		}
+		return false;
 	}
 	private String askGoogle_all(double px,double py) throws IOException
 	{
@@ -585,7 +650,27 @@ public class Scheduling {
 		
 		return poi;
 	}
+	private double Euclid_Distance(String start,String end)
+	{
+		double wd1,jd1,wd2,jd2;
+		String spl[] = start.split(" ");
+		wd1 = Double.parseDouble(spl[0].split("POINT\\(")[1]);
+		jd1 = Double.parseDouble(spl[0].split("\\)")[0]);
+		
+		spl = end.split(" ");
+		wd2 = Double.parseDouble(spl[0].split("POINT\\(")[1]);
+		jd2 = Double.parseDouble(spl[0].split("\\)")[0]);
+		
+		
+		double x,y,out;
+		double PI=3.14159265;
+		double R=6.371229*1e6;
 	
+		x=(jd2-jd1)*PI*R*Math.cos( ((wd1+wd2)/2) *PI/180)/180;
+		y=(wd2-wd1)*PI*R/180;
+		out=Math.hypot(x,y);
+		return out/1000;
+	}
 	
 	
 	

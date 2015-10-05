@@ -678,13 +678,40 @@ public class STScheduling
 //
 //		return poi;
 //	}
-	
-	
+	private HashMap<String,String> startMapping()
+	{
+		HashMap<String,String> mapping = new HashMap<String,String>();
+		for (int i=1;i<9;i++)
+			mapping.put("TH" + (i+9), "PF" + i);
+		
+		return mapping;
+	}
+	private String getPreference(List<String> p,HashMap<String,String> mapping)
+	{
+		String preference="";
+		// 將preference寫入條件
+		if (p.size()==0)
+		{
+			for (int i = 1; i < 8; i++)
+				preference += "A.preference = 'PF" + i + "' or ";
+			preference += "A.preference = 'PF8'";
+		}
+		else
+		{
+			for (int i = 0; i < p.size() - 1; i++)
+				preference += "A.preference = '" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "' or ";
+			preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
+		}
+		
+		return preference;
+		
+	}
 	/**開始每一天的行程規劃*/
 	private List<TourEvent> startPlan(ArrayList<String> tourCity,SchedulingInput json) throws ParseException
 	{
 		Date start = json.getStartTime(),end = json.getStartTime(),freeTime;
-		String pre = getPre(json.getPreferenceList()); //取得偏好條件
+		HashMap<String,String> mapping = startMapping();
+		String pre = getPreference(json.getPreferenceList(),mapping); //取得偏好條件
 		
 		
 		switch (json.getLooseType())
@@ -1222,17 +1249,17 @@ public class STScheduling
 		out=Math.hypot(x,y);
 		return out/1000;
 	}
-	private String getPre(List<String> pre)
-	{
-		String str="";
-		for (int i=0;i<pre.size()-1;i++)
-		{
-			str+="'" + pre.get(i) + "',";
-		}
-		str+="'" + pre.get(pre.size()-1) + "'";
-		
-		return str;
-	}
+//	private String getPre(List<String> pre)
+//	{
+//		String str="";
+//		for (int i=0;i<pre.size()-1;i++)
+//		{
+//			str+="'" + pre.get(i) + "',";
+//		}
+//		str+="'" + pre.get(pre.size()-1) + "'";
+//		
+//		return str;
+//	}
 	private TourEvent FindTop(String city,String pre,Date startTime,ArrayList<String> repeat,int type)
 	{
 		
