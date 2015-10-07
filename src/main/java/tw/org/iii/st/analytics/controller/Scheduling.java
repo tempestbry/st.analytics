@@ -719,7 +719,7 @@ public class Scheduling {
 	{
 		HashMap<String,String> mapping = new HashMap<String,String>();
 		for (int i=1;i<9;i++)
-			mapping.put("TH" + (i+9), "PF" + i);
+			mapping.put("PF" + i,"TH" + (i+9));
 		
 		return mapping;
 	}

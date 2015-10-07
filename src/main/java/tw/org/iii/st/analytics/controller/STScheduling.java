@@ -682,7 +682,7 @@ public class STScheduling
 	{
 		HashMap<String,String> mapping = new HashMap<String,String>();
 		for (int i=1;i<9;i++)
-			mapping.put("TH" + (i+9), "PF" + i);
+			mapping.put("PF" + i,"TH" + (i+9));
 		
 		return mapping;
 	}
@@ -1168,7 +1168,7 @@ public class STScheduling
 		
 		if ("".equals(poi.getPoiId()) || poi.getPoiId()==null) //上面條件都沒符合的
 		{
-			result = analytics.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' ORDER BY distance limit 0,20");	
+			result = analytics.queryForList("SELECT arrival_id,time,stay_time FROM euclid_distance_0826 WHERE id = '"+before.getPoiId()+"' and preference IS NOT NULL ORDER BY distance limit 0,20");	
 			for (Map<String, Object> r : result)
 			{
 				if (checkRule(repeat,r.get("arrival_id").toString()))
@@ -1199,7 +1199,7 @@ public class STScheduling
 		if (poi.getPoiId()==null) //莫名其妙的掛了
 		{
 			result = analytics.queryForList("SELECT county FROM st_scheduling WHERE poiId = '"+before.getPoiId()+"'");	
-			result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '"+result.get(0).get("county").toString()+"' ORDER BY rand()");
+			result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '"+result.get(0).get("county").toString()+"' and preference IS NOT NULL ORDER BY rand()");
 			for (Map<String, Object> r : result)
 			{
 				if (checkRule(repeat,r.get("poiId").toString()))
@@ -1295,7 +1295,7 @@ public class STScheduling
 
 		if (poi.getPoiId()==null)
 		{
-			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' order by rand()");
+			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' and preference IS NOT NULL order by rand()");
 			for (Map<String, Object> r : result)
 			{
 				if (checkRule(repeat,r.get("poiId").toString()))
