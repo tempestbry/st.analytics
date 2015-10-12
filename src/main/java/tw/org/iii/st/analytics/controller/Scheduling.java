@@ -192,14 +192,14 @@ public class Scheduling {
 		{
 			if (json.getMustPoiList().size()==0) //沒有必去景點
 			{
-				if (json.getGps()==null)
+				if (json.getGps()==null) //沒有GPS則隨機挑選縣市
 				{
 					List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT DISTINCT county FROM st_scheduling order by rand()");
 					List<String> c = new ArrayList<String>();
 					c.add(result.get(0).get("county").toString());
 					json.setCityList(c);
 				}
-				else
+				else //有GPS則問google並依所在縣市安排, 若google回傳錯誤則隨機挑選
 				{
 					List<String> c = new ArrayList<String>();
 					String cc = askGoogle_all(json.getGps().getLng(), json.getGps().getLat());
@@ -222,8 +222,8 @@ public class Scheduling {
 				List<String> must = json.getMustPoiList();
 				if (must.size()>1) //超過一個must poi
 				{
-					if (distance(must)) //必去景點之間是否差超過100公里
-					{
+//					if (distance(must)) //必去景點之間是否差超過100公里, 則全部塞在一起
+//					{
 						String query = "";
 						for (int i=0;i<must.size()-1;i++)
 							query+="'" + must.get(i) + "',";
@@ -235,7 +235,7 @@ public class Scheduling {
 							TourEvent t = new TourEvent();
 							t.setPoiId(result.get(i).get("poiId").toString());
 							t.setStartTime(start);
-							t.setEndTime(addTime(start,(int)result.get(i).get("stay_time")));
+							t.setEndTime(addTime(start,(double)result.get(i).get("stay_time")));
 							try
 							{
 								double dis = Euclid_Distance(result.get(i).get("location").toString(),result.get(i).get("location").toString());
@@ -249,14 +249,21 @@ public class Scheduling {
 						}
 						
 						return tourResult;
-					}
-					else
-					{
-						List<String> c = new ArrayList<String>();
-						List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT county FROM st_scheduling WHERE poiId ='"+must.get(0)+"'");
-						c.add(result.get(0).get("county").toString());
-						json.setCityList(c);
-					}
+//					}
+//					else //如果不是, 則將
+//					{
+//						List<String> c = new ArrayList<String>();
+//						List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT county FROM st_scheduling WHERE poiId ='"+must.get(0)+"'");
+//						c.add(result.get(0).get("county").toString());
+//						json.setCityList(c);
+//					}
+				}
+				else //只有一個的話, 則用該poi所在縣市做為遊玩縣市
+				{
+					List<String> c = new ArrayList<String>();
+					List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT county FROM st_scheduling WHERE poiId ='"+must.get(0)+"'");
+					c.add(result.get(0).get("county").toString());
+					json.setCityList(c);
 				}
 			}
 			
@@ -286,13 +293,169 @@ public class Scheduling {
 		}
 		else
 		{
-			
+			tourResult.addAll(MustResult(json.getMustPoiList(),json.getStartTime(),json.getLooseType()));
+			index = tourResult.size();
+			repeat.add(tourResult.get(index-1).getPoiId());
+			freeTime = tourResult.get(index-1).getEndTime();
+			System.out.println(freeTime);
+			while (FreeTime(freeTime,json.getEndTime()) >= 1)
+			{
+				tourResult.add(otherPOI(tourResult.get(index-1),pre,json.getLooseType(),repeat,false));
+				index++;
+				repeat.add(tourResult.get(index-1).getPoiId());
+				freeTime = tourResult.get(index-1).getEndTime();
+				System.out.println(freeTime);
+			}
 		}
 		
 		
 		return tourResult;
 
 	}
+	private class must
+	{
+		double stay_time;
+		double time;
+	}
+	private List<TourEvent> MustResult(List<String> poi,Date start,int type) throws ParseException
+	{
+		List<TourEvent> tour = new ArrayList<TourEvent>();
+		if (poi.size()==1)
+		{
+			TourEvent t = new TourEvent();
+			t.setPoiId(poi.get(0));
+			t.setStartTime(start);
+			t.setEndTime(addTime(start,30));
+			tour.add(t);
+			return tour;
+		}
+		
+		
+		String query="";
+		for (String p : poi)
+		{
+			for (String pp : poi)
+			{
+				if (p.equals(pp))
+					continue;
+				query+= "(id='" + p + "' and arrival_id = '"+pp+"') and ";
+			}
+		}
+		query = query.substring(0,query.lastIndexOf(" and"));
+		
+		double stay;
+		
+		HashMap<String,HashMap<String,must>> poiInfo = new HashMap<String,HashMap<String,must>>();
+		List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT id,arrival_id,time,stay_time FROM euclid_distance_0826 WHERE "+query+"");
+		for (Map<String, Object> r : result) //取得兩兩景點之間的時間與停留時間
+		{
+			if (!poiInfo.containsKey(r.get("id").toString()))
+			{
+				HashMap<String,must> tmp = new HashMap<String,must>();
+				must m = new must();
+				try
+				{
+					stay = (int)r.get("stay_time") + (type*30);
+				}
+				catch (Exception e)
+				{
+					stay = 60 + (type*30);
+				}
+				m.stay_time = stay;
+				m.time = (int)r.get("time") * 1.5;
+				tmp.put(r.get("arrival_id").toString(), m);
+				poiInfo.put(r.get("id").toString(),tmp);
+			}
+			else
+			{
+				must m = new must();
+				try
+				{
+					stay = (int)r.get("stay_time") + (type*30);
+				}
+				catch (Exception e)
+				{
+					stay = 60 + (type*30);
+				}
+				m.stay_time = stay;
+				m.time = (int)r.get("time");
+				poiInfo.get(r.get("id").toString()).put(r.get("arrival_id").toString(), m);
+			}
+		}
+		
+		ArrayList<String[]> all = prefix(poi.toArray(new String[poi.size()]),poi.size(),0);
+		int min=100000,sum;
+		String minResult[] = null;
+		for (String a[] : all)
+		{
+			sum=0;
+			for (int i=0;i<a.length-1;i++)
+				sum+=poiInfo.get(a[i]).get(a[i+1]).time;
+			if (sum<min)
+			{
+				min = sum;
+				minResult = a;
+			}
+				
+		}
+		
+		int index=0;
+		
+		for (String m : minResult)
+		{
+			TourEvent t = new TourEvent();
+			t.setPoiId(m);
+			if (index==0)
+			{
+				t.setStartTime(start);
+				t.setEndTime(addTime(start,30));
+			}
+			else
+			{
+				Date end = tour.get(tour.size()-1).getEndTime();
+				double time = poiInfo.get(tour.get(tour.size()-1).getPoiId()).get(m).time;
+				stay = poiInfo.get(tour.get(tour.size()-1).getPoiId()).get(m).stay_time;
+				t.setStartTime(addTime(end,time));
+				t.setEndTime(addTime(t.getStartTime(),stay));
+			}
+			tour.add(t);
+			
+		}
+		
+		return tour;
+		
+	}
+	private ArrayList<String[]> prefix(String[] array, int n, int k) 
+	{
+		ArrayList<String[]> result = new ArrayList<String[]>();
+		if (n == k) 
+		{
+			String[] out = new String[n];
+			for (int i = 0; i < array.length; i++)
+				out[i] = array[i];
+			result.add(out);
+
+		} 
+		else 
+		{
+			for (int i = k; i < n; i++) 
+			{
+				swap(array, k, i);
+				result.addAll(prefix(array, n, k + 1));
+				swap(array, i, k);
+			}
+		}	
+		return result;
+	}
+	 private void swap(String[] a, int x, int y) 
+	 {
+		 String temp = a[x];
+		 a[x] = a[y];
+		 a[y] = temp;
+	 }
+	
+	
+	
 	private boolean distance(List<String> poi)
 	{
 		List<Map<String, Object>> result;
@@ -405,20 +568,21 @@ public class Scheduling {
 					poi.setPoiId(r.get("arrival_id").toString());
 					try{
 						if (!eatTime)
-							poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(r.get("time").toString())));
+							poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(r.get("time").toString())*1.5));
 						else
 							poi.setStartTime(addTime(addTime(before.getEndTime(),120),Double.parseDouble(r.get("time").toString())));
 						try
 						{
-							stay = Double.parseDouble(r.get("stay_time").toString()) + (type * 30);
+							stay = Double.parseDouble(result.get(0).get("stay_time").toString()) + (type * 30);
 						}
 						catch (Exception e)
 						{
-							stay =90 + (type * 30);
+							e.printStackTrace();
+							stay = 90 + (type * 30);
 						}
 						
-							if (stay<=30)
-								stay+=30;
+						if (stay<30) //停留時間低於半小時以半小時計
+							stay = 30;
 						poi.setEndTime(addTime(poi.getStartTime(),stay));
 					}catch (Exception e){e.printStackTrace();}
 					break;
@@ -439,7 +603,7 @@ public class Scheduling {
 				{
 					poi.setPoiId(r.get("arrival_id").toString());
 					try{
-						poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(r.get("time").toString())));
+						poi.setStartTime(addTime(before.getEndTime(),Double.parseDouble(r.get("time").toString())*1.5));
 						
 						try
 						{
@@ -447,10 +611,12 @@ public class Scheduling {
 						}
 						catch (Exception e)
 						{
+							e.printStackTrace();
 							stay = 90 + (type * 30);
-						}				
-						if (stay==30)
-							stay+=30;
+						}
+						
+						if (stay<30) //停留時間低於半小時以半小時計
+							stay = 30;
 						poi.setEndTime(addTime(poi.getStartTime(),stay));
 					}catch (Exception e){e.printStackTrace();}
 					break;
@@ -479,7 +645,7 @@ public class Scheduling {
 					double time;
 					try
 					{
-						time = (int)(Distance(latitude,longitude,latitude1,longitude1) / 0.75);
+						time = (int)(Distance(latitude,longitude,latitude1,longitude1) / 0.6)*1.5;
 					}
 					catch (Exception e)
 					{
@@ -655,11 +821,11 @@ public class Scheduling {
 		double wd1,jd1,wd2,jd2;
 		String spl[] = start.split(" ");
 		wd1 = Double.parseDouble(spl[0].split("POINT\\(")[1]);
-		jd1 = Double.parseDouble(spl[0].split("\\)")[0]);
+		jd1 = Double.parseDouble(spl[1].split("\\)")[0]);
 		
 		spl = end.split(" ");
 		wd2 = Double.parseDouble(spl[0].split("POINT\\(")[1]);
-		jd2 = Double.parseDouble(spl[0].split("\\)")[0]);
+		jd2 = Double.parseDouble(spl[1].split("\\)")[0]);
 		
 		
 		double x,y,out;

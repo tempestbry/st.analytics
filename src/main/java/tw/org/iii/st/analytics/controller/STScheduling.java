@@ -880,8 +880,8 @@ public class STScheduling
 	}
 	private class must
 	{
-		int stay_time;
-		int time;
+		double stay_time;
+		double time;
 	}
 	private List<TourEvent> MustResult(ArrayList<String> poi,Date start,int type) throws ParseException
 	{
@@ -909,7 +909,7 @@ public class STScheduling
 		}
 		query = query.substring(0,query.lastIndexOf(" and"));
 		
-		int stay;
+		double stay;
 		
 		HashMap<String,HashMap<String,must>> poiInfo = new HashMap<String,HashMap<String,must>>();
 		List<Map<String, Object>> result = analytics.queryForList("SELECT id,arrival_id,time,stay_time FROM euclid_distance_0826 WHERE "+query+"");
@@ -928,7 +928,7 @@ public class STScheduling
 					stay = 90 + (type*30);
 				}
 				m.stay_time = stay;
-				m.time = (int)r.get("time");
+				m.time = (int)r.get("time")*1.5;
 				tmp.put(r.get("arrival_id").toString(), m);
 				poiInfo.put(r.get("id").toString(),tmp);
 			}
@@ -944,7 +944,7 @@ public class STScheduling
 					stay = 90 + (type*30);
 				}
 				m.stay_time = stay;
-				m.time = (int)r.get("time");
+				m.time = (int)r.get("time")*1.5;
 				poiInfo.get(r.get("id").toString()).put(r.get("arrival_id").toString(), m);
 			}
 		}
