@@ -35,7 +35,7 @@ public class STScheduling
 		
 	}
 	public List<TourEvent> scheduling(SchedulingInput json){
-				
+
 		ArrayList<String> tourCity;
 		if (checkAuto(json.getCityList()) && json.getMustPoiList().size() == 0)
 			tourCity = AutoReco(json); //不限縣市
@@ -237,6 +237,7 @@ public class STScheduling
 		region.put("TW20",6); region.put("TW21",6); region.put("TW22",6); //外島
 		
 		HashMap<Integer,ArrayList<String>> group = new HashMap<Integer,ArrayList<String>>();
+		//合併必去景點所在縣市
 		for (String mm : m)
 		{
 			if (!group.containsKey(region.get(mm)))
@@ -251,6 +252,37 @@ public class STScheduling
 			}
 		}
 		
+		if (group.size()==0)
+		{
+			List<Integer> reg = new ArrayList<Integer>();
+			for (String nn : n)
+			{
+				if (nn.equals("all"))
+					continue;
+				if (!reg.contains(region.get(nn)))
+					reg.add(region.get(nn));
+			}
+				
+			
+			for (String r : region.keySet())
+			{
+				if (reg.contains(region.get(r)))
+				{
+					if (!group.containsKey(region.get(r)))
+					{
+						ArrayList<String> tmp = new ArrayList<String>();
+						tmp.add(r);
+						group.put(region.get(r), tmp);
+					}
+					else
+					{
+						group.get(region.get(r)).add(r);
+					}
+				}
+				
+			}
+		}
+		
 		for (Integer g : group.keySet())
 		{
 			System.out.print("Region : " + g + " -> ");
@@ -259,7 +291,7 @@ public class STScheduling
 			System.out.println();
 		}
 		
-		ArrayList<String> result = insert(region,group,n);
+		ArrayList<String> result = insert(region,group,n,m.size());
 		
 		return result;
 	}
@@ -380,7 +412,7 @@ public class STScheduling
 		
 		return tmp;
 	}
-	private ArrayList<String> insert(HashMap<String,Integer> region,HashMap<Integer,ArrayList<String>> group,List<String> now)
+	private ArrayList<String> insert(HashMap<String,Integer> region,HashMap<Integer,ArrayList<String>> group,List<String> now,int must_size)
 	{
 		ArrayList<String> result = new ArrayList<String>();
 		ArrayList<info> index = getCityIndex(now.toArray(new String[now.size()]));
@@ -426,7 +458,7 @@ public class STScheduling
 				tmp-=1;
 			}
 				
-			if (tmp > -1)
+			if (tmp > -1 && must_size>0)
 			{
 				for (int j=target-1;j>=0;j--)
 				{
@@ -469,7 +501,7 @@ public class STScheduling
 				tmp-=1;
 			}
 				
-			if (tmp > -1)
+			if (tmp > -1 && must_size>0)
 			{
 				for (int j=start;j<now.size();j++)
 				{
@@ -521,10 +553,10 @@ public class STScheduling
 					ArrayList<String> arr = group.get(i);
 					for (int j=0;j<arr.size()-1;j++)
 					{
-						if (!Contains(result,arr.get(j)))
+						if (!Contains(result,arr.get(j)) && must_size>0)
 							str+= arr.get(j) + "+";
 					}
-					if (!Contains(result,arr.get(arr.size()-1)))
+					if (!Contains(result,arr.get(arr.size()-1)) && must_size>0)
 						str+= arr.get(arr.size()-1);
 					if (!"".equals(str))
 					{
@@ -1023,7 +1055,7 @@ public class STScheduling
 	//避免遇到名稱一樣或相似的POI
 	private boolean checkRule(ArrayList<String> repeat,String pid)
 	{
-		if (repeat.contains(pid) || repeat.contains(poiNames.get(pid)) || poiNames.get(pid).contains("夜市") || poiNames.get(pid).contains("會館"))
+		if (repeat.contains(pid) || repeat.contains(poiNames.get(pid)) || poiNames.get(pid).contains("夜市") || poiNames.get(pid).contains("會館") || poiNames.get(pid).contains("飯店") || poiNames.get(pid).contains("旅館") || poiNames.get(pid).contains("旅店"))
 			return false;
 		for (String r : repeat)
 		{
@@ -1318,7 +1350,30 @@ public class STScheduling
 				}
 			}
 		}
-		
+		if (poi.getPoiId()==null)
+		{
+			result = analytics.queryForList("SELECT poiId,stay_time FROM st_scheduling WHERE county = '"+city+"' order by rand()");
+			for (Map<String, Object> r : result)
+			{
+				if (checkRule(repeat,r.get("poiId").toString()))
+				{
+					poi.setPoiId(r.get("poiId").toString());
+					poi.setStartTime(startTime);
+					
+					try
+					{
+						stay = Double.parseDouble(r.get("stay_time").toString()) + (type*30);
+					}
+					catch (Exception e)
+					{
+						stay = 90 + (type*30);
+					}
+					poi.setEndTime(addTime(startTime,stay));
+					flag = true;
+					break;
+				}
+			}
+		}
 		return poi;
 	}
 	private Date addTime(Date d, double minute) {
