@@ -300,6 +300,48 @@ public class STScheduling
 		String county;
 		int index;
 	}
+	private ArrayList<String> fillCounty(String county,int days,HashMap<String,Integer> region)
+	{
+		
+		ArrayList<String> tmp = new ArrayList<String>();
+		int index = region.get(county);
+		for (String r : region.keySet())
+		{
+			if (county=="")
+			{
+				if (days==0)
+					break;
+				tmp.add(r);
+				days--;
+			}
+			else
+			{
+				if (index==region.get(r))
+				{
+					if (days==0)
+						break;
+					tmp.add(r);
+					days--;
+				}
+			}
+			
+		}
+		while (days>0)
+		{
+			for (String r : region.keySet())
+			{
+				if (index==region.get(r))
+				{
+					if (days==0)
+						break;
+					tmp.add(r);
+					days--;
+
+				}
+			}
+		}
+		return tmp;
+	}
 	private ArrayList<String> fillCounty(String county,int days,HashMap<String,Integer> region,ArrayList<String> repeat)
 	{
 		ArrayList<String> tmp = new ArrayList<String>();
@@ -453,7 +495,27 @@ public class STScheduling
 				}
 				catch (Exception e) //候選清單不夠時自動填補
 				{
-					result.addAll(fillCounty(candi.get(tmp+1),target-j,region,result));
+					if (tmp==-1)
+					{
+						result.addAll(fillCounty(result.get(result.size()-1),target-j,region));
+					}
+					else
+					{
+						try
+						{
+							result.addAll(fillCounty(candi.get(tmp+1),target-j,region,result));
+						}
+						catch (Exception ee)
+						{
+							if (result.size()>0)
+								result.addAll(fillCounty(result.get(result.size()-1),target-j,region));
+							else
+								result.addAll(fillCounty("",target-j,region));
+						}
+						
+					}
+					j++;
+					
 				}
 				tmp-=1;
 			}
