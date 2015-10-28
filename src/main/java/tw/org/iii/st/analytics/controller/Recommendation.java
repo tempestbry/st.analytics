@@ -44,7 +44,7 @@ public class Recommendation {
 	private JdbcTemplate jdbcTemplate;
 	
 	@Autowired
-	@Qualifier("commonJdbcTemplate")
+	@Qualifier("stcJdbcTemplate")
 	private JdbcTemplate commonJdbcTemplate;
 
 	@Autowired
