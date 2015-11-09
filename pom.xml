@@ -4,15 +4,14 @@
 	<groupId>tw.org.iii</groupId>
 	<artifactId>st.analytics</artifactId>
 	<packaging>war</packaging>
-	
+
 	<version>0.0.1-SNAPSHOT</version>
 	<name>st.analytics Maven Webapp</name>
 	<url>http://maven.apache.org</url>
 	<repositories>
-		<repository>
-			<id>spring-milestone</id>
-			<url>https://repo.spring.io/libs-release</url>
-		</repository>
+		<!-- <repository> <id>spring-milestone</id> <url>https://repo.spring.io/libs-release</url> 
+			</repository> <repository> <id>in-project</id> <name>In Project Repo</name> 
+			<url>file://${project.basedir}/libs</url> </repository> -->
 	</repositories>
 
 
@@ -56,13 +55,13 @@
 			<artifactId>spring-context-support</artifactId>
 			<version>4.1.6.RELEASE</version>
 		</dependency>
-		
+
 		<!-- Transaction dependency is required with Quartz integration -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-tx</artifactId>
-            <version>4.1.6.RELEASE</version>
-        </dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-tx</artifactId>
+			<version>4.1.6.RELEASE</version>
+		</dependency>
 
 		<dependency>
 			<groupId>mysql</groupId>
@@ -103,6 +102,17 @@
 			<version>1.10.0</version>
 		</dependency>
 
+
+		<!-- lindo -->
+
+		<dependency>
+			<groupId>ldapjdk</groupId>
+			<artifactId>ldapjdk</artifactId>
+			<scope>system</scope>
+			<version>1.0</version>
+			<systemPath>${basedir}\libs\lindo-9.0.jar</systemPath>
+		</dependency>
+
 	</dependencies>
 
 
@@ -126,9 +136,7 @@
 				<groupId>org.apache.tomcat.maven</groupId>
 				<artifactId>tomcat7-maven-plugin</artifactId>
 				<version>2.2</version>
-				<!--<configuration>
-					<path>myProject</path>
-				</configuration>-->
+				<!--<configuration> <path>myProject</path> </configuration> -->
 			</plugin>
 		</plugins>
 

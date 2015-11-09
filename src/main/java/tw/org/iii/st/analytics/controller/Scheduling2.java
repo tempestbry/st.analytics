@@ -10,9 +10,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.lindo.Lindo;
+
 import tw.org.iii.model.TourEvent;
 import tw.org.iii.model.SchedulingInput;
 import tw.org.iii.model.DailyItinerary;
+
 
 @RestController
 @RequestMapping("/Scheduling2")
@@ -24,7 +27,17 @@ public class Scheduling2 {
 
 	@RequestMapping("/QuickPlan")
 	private @ResponseBody
-	List<TourEvent> createItinerary(@RequestBody SchedulingInput json) {
+	List<TourEvent> createItinerary() throws Exception {
+		System.out.println("1!");
+		TestLindo tl = new TestLindo();
+		tl.run();
+
+		/*TestLindo tl = new TestLindo();
+		
+		TestLindo tl = new TestLindo();
+System.out.println("2!");
+tl.run();
+		System.out.println("3!");
 
 		int numberOfDays = json.getCityList().size();
 		if (numberOfDays == 0)
@@ -49,7 +62,7 @@ public class Scheduling2 {
 		
 		// reschedule overall itinerary
 		//TODO
-		
+		*/
 		return null;
 	}
 	
@@ -68,6 +81,5 @@ public class Scheduling2 {
 		
 		return 0;
 	}
-
 }
 
