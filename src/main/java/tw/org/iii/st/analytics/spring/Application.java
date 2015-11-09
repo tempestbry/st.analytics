@@ -104,6 +104,30 @@ public class Application extends SpringBootServletInitializer {
 		return dataSource;
 	}
 
+	@Bean(name = "datasourceSTC")
+	public ComboPooledDataSource dataSourceSTC() throws PropertyVetoException {
+		ComboPooledDataSource dataSource = new ComboPooledDataSource();
+		dataSource.setDriverClass(environment
+				.getRequiredProperty("c3p0.driver"));
+		dataSource.setJdbcUrl(environment.getRequiredProperty("c3p0.url.stc"));
+		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
+		dataSource
+				.setPassword(environment.getRequiredProperty("c3p0.password"));
+		dataSource.setInitialPoolSize(environment.getRequiredProperty(
+				"c3p0.initialPoolSize", Integer.class));
+		dataSource.setMaxPoolSize(environment.getRequiredProperty(
+				"c3p0.maxPoolSize", Integer.class));
+		dataSource.setMinPoolSize(environment.getRequiredProperty(
+				"c3p0.minPoolSize", Integer.class));
+		dataSource.setAcquireIncrement(environment.getRequiredProperty(
+				"c3p0.acquireIncrement", Integer.class));
+		dataSource.setMaxStatements(environment.getRequiredProperty(
+				"c3p0.maxStatements", Integer.class));
+		dataSource.setMaxIdleTime(environment.getRequiredProperty(
+				"c3p0.maxIdleTime", Integer.class));
+		return dataSource;
+	}
+
 	@Bean(name = "datasourceAnalytics")
 	public ComboPooledDataSource dataSourceAnalytics()
 			throws PropertyVetoException {
@@ -130,9 +154,45 @@ public class Application extends SpringBootServletInitializer {
 		return dataSource;
 	}
 
+	@Bean(name = "datasourceGplace")
+	public ComboPooledDataSource dataSourceGplace()
+			throws PropertyVetoException {
+		ComboPooledDataSource dataSource = new ComboPooledDataSource();
+		dataSource.setDriverClass(environment
+				.getRequiredProperty("c3p0.driver"));
+		dataSource.setJdbcUrl(environment
+				.getRequiredProperty("c3p0.url.Gplace"));
+		dataSource.setUser(environment.getRequiredProperty("c3p0.user"));
+		dataSource
+				.setPassword(environment.getRequiredProperty("c3p0.password"));
+		dataSource.setInitialPoolSize(environment.getRequiredProperty(
+				"c3p0.initialPoolSize", Integer.class));
+		dataSource.setMaxPoolSize(environment.getRequiredProperty(
+				"c3p0.maxPoolSize", Integer.class));
+		dataSource.setMinPoolSize(environment.getRequiredProperty(
+				"c3p0.minPoolSize", Integer.class));
+		dataSource.setAcquireIncrement(environment.getRequiredProperty(
+				"c3p0.acquireIncrement", Integer.class));
+		dataSource.setMaxStatements(environment.getRequiredProperty(
+				"c3p0.maxStatements", Integer.class));
+
+		// dataSource.setMaxStatementsPerConnection(
+		// environment.getRequiredProperty("c3p0.maxStatementsPerConnection",
+		// Integer.class));
+
+		dataSource.setMaxIdleTime(environment.getRequiredProperty(
+				"c3p0.maxIdleTime", Integer.class));
+		return dataSource;
+	}
+
 	@Bean(name = "stJdbcTemplate")
 	public JdbcTemplate stJdbcTemplate() throws PropertyVetoException {
 		return new JdbcTemplate(dataSourceST());
+	}
+
+	@Bean(name = "stcJdbcTemplate")
+	public JdbcTemplate stcJdbcTemplate() throws PropertyVetoException {
+		return new JdbcTemplate(dataSourceSTC());
 	}
 
 	@Bean(name = "hualienJdbcTempplate")
@@ -143,6 +203,11 @@ public class Application extends SpringBootServletInitializer {
 	@Bean(name = "analyticsJdbcTemplate")
 	public JdbcTemplate analyticsJdbcTemplate() throws PropertyVetoException {
 		return new JdbcTemplate(dataSourceAnalytics());
+	}
+
+	@Bean(name = "GplaceJdbcTemplate")
+	public JdbcTemplate GplaceJdbcTemplate() throws PropertyVetoException {
+		return new JdbcTemplate(dataSourceGplace());
 	}
 
 	@Bean
@@ -176,8 +241,9 @@ public class Application extends SpringBootServletInitializer {
 		List<Map<String, Object>> rs = analytics
 				.queryForList("SELECT * FROM poiName_new");
 		for (Map<String, Object> r : rs) {
-			if (r.get("name").toString().length() == 1)
+			if (r.get("name").toString().length() == 1) {
 				continue;
+			}
 			term.put(r.get("name").toString(), r.get("poiId").toString());
 		}
 		return term;
@@ -188,8 +254,9 @@ public class Application extends SpringBootServletInitializer {
 		System.out.println("init loadDic");
 		HashMap<String, String> terms = readTerms();
 		StringBuilder sb = new StringBuilder();
-		for (String t : terms.keySet())
+		for (String t : terms.keySet()) {
 			sb.append(t + "\n");
+		}
 
 		Dictionary dic = Dictionary.getInstance();
 
@@ -232,6 +299,7 @@ public class Application extends SpringBootServletInitializer {
 	}
 
 	private static class WordsFileLoading implements FileLoading {
+
 		final Map<Character, CharNode> dic;
 
 		/**
@@ -281,7 +349,6 @@ public class Application extends SpringBootServletInitializer {
 	 * SchedulerFactoryBean bean = new SchedulerFactoryBean();
 	 * bean.setTriggers(cronTriggerFactoryBean().getObject()); return bean; }
 	 */
-
 	@Override
 	protected SpringApplicationBuilder configure(
 			SpringApplicationBuilder application) {

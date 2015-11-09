@@ -32,6 +32,10 @@ public class OptimizeSchedule {
 	@Autowired
 	@Qualifier("stJdbcTemplate")
 	private JdbcTemplate stjdbcTemplate;
+	
+	@Autowired
+	@Qualifier("stcJdbcTemplate")
+	private JdbcTemplate stcjdbcTemplate;
 
 	@Autowired
 	@Qualifier("analyticsJdbcTemplate")
@@ -336,7 +340,7 @@ public class OptimizeSchedule {
 		String sql = "SELECT AsText(A.location) FROM Poi as A, Detail as B where A.detailId = B.id AND B.poiId IN ('" + startPoiID + "', '" + endPoiID + "') ORDER BY FIELD(B.poiId, '" + startPoiID + "', '" + endPoiID + "')";
 		//	System.out.println("SQLTWOPOINT:" + sql);
 
-		List<String> twoGeo = stjdbcTemplate.queryForList(sql, String.class);
+		List<String> twoGeo = stcjdbcTemplate.queryForList(sql, String.class);
 		List<GeoPoint> twoPoiGeo = new ArrayList<GeoPoint>();
 		for(int i=0; i<twoGeo.size(); i++) {
 			String[] tmp = twoGeo.get(i).replace("POINT(", "").replace(")", "").split(" ");	

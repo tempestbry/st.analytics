@@ -44,8 +44,8 @@ public class Recommendation {
 	private JdbcTemplate jdbcTemplate;
 	
 	@Autowired
-	@Qualifier("stJdbcTemplate")
-	private JdbcTemplate stJdbcTemplate;
+	@Qualifier("stcJdbcTemplate")
+	private JdbcTemplate commonJdbcTemplate;
 
 	@Autowired
 	@Qualifier("analyticsJdbcTemplate")
@@ -231,7 +231,7 @@ public class Recommendation {
 				}
 				else
 				{
-					rs = stJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
+					rs = commonJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
 					String county = rs.get(0).get("countyId").toString();
 					ArrayList<String> tmp = new ArrayList<String>();
 					int value = 100000;
@@ -345,7 +345,7 @@ public class Recommendation {
 	private String askGoogle_all(double px,double py) throws IOException
 	{
 		HashMap<String,String> county = new HashMap<String,String>();
-		List<Map<String, Object>> rs = stJdbcTemplate.queryForList("SELECT id,name FROM County");
+		List<Map<String, Object>> rs = commonJdbcTemplate.queryForList("SELECT id,name FROM County");
 		for (Map<String, Object> i : rs) 
 			county.put(i.get("name").toString().replace("臺", "台"), i.get("id").toString());
 		
