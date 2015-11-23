@@ -29,7 +29,7 @@ public class Scheduling2 {
 	private @ResponseBody
 	List<TourEvent> createItinerary() throws Exception {
 		System.out.println("1!");
-		TestLindo tl = new TestLindo();
+		TestLindo2 tl = new TestLindo2();
 		tl.run();
 
 		/*TestLindo tl = new TestLindo();
