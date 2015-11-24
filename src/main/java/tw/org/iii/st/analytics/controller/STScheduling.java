@@ -24,7 +24,7 @@ import tw.org.iii.model.connection;
 public class STScheduling {
 
 		@Autowired
-		@Qualifier("stJdbcTemplate")
+		@Qualifier("stcJdbcTemplate")
 		private JdbcTemplate st;
 
 		@Autowired
@@ -186,7 +186,7 @@ public class STScheduling {
 
 				ArrayList<String> tourCity;
 				if (checkAuto(json.getCityList()) && json.getMustPoiList().size() == 0) {
-						tourCity = AutoReco(json); //不限縣市
+						tourCity = AutoReco(json); //不指定縣市
 				} else {
 						tourCity = ExistCity(json); //不限縣市
 				}
@@ -370,31 +370,16 @@ public class STScheduling {
 
 		private ArrayList<String> POIGroupAndSort(List<String> n, ArrayList<String> m) {
 				HashMap<String, Integer> region = new HashMap<String, Integer>();
-				region.put("TW1", 0);
-				region.put("TW2", 0);
-				region.put("TW3", 0); //北北基
-				region.put("TW4", 1);
-				region.put("TW5", 1);
-				region.put("TW6", 1);
-				region.put("TW7", 1);//桃竹苗
-				region.put("TW8", 2);
-				region.put("TW9", 2);
-				region.put("TW10", 2); //中彰投
-				region.put("TW11", 3);
-				region.put("TW12", 3);
-				region.put("TW13", 3);
-				region.put("TW14", 3); //雲嘉南
-				region.put("TW15", 4);
-				region.put("TW16", 4); //高屏
-				region.put("TW17", 5); //宜花東
-				region.put("TW18", 5);
-				region.put("TW19", 5);
-				region.put("TW20", 6);
-				region.put("TW21", 6);
-				region.put("TW22", 6); //外島
+				region.put("TW1", 0); region.put("TW2", 0); region.put("TW3", 0); //北北基
+				region.put("TW4", 1); region.put("TW5", 1); region.put("TW6", 1); region.put("TW7", 1);//桃竹苗
+				region.put("TW8", 2); region.put("TW9", 2); region.put("TW10", 2); //中彰投
+				region.put("TW11", 3); region.put("TW12", 3); region.put("TW13", 3); region.put("TW14", 3); //雲嘉南
+				region.put("TW15", 4); region.put("TW16", 4); //高屏
+				region.put("TW17", 5); region.put("TW18", 5); region.put("TW19", 5);//宜花東
+				region.put("TW20", 6); region.put("TW21", 6); region.put("TW22", 6); //外島
 
 				HashMap<Integer, ArrayList<String>> group = new HashMap<Integer, ArrayList<String>>();
-				//合併必去景點所在縣市
+				//合併必去景點所在縣市, 取得<區塊,縣市清單>
 				for (String mm : m) {
 						if (!group.containsKey(region.get(mm))) {
 								ArrayList<String> tmp = new ArrayList<String>();
@@ -405,7 +390,7 @@ public class STScheduling {
 						}
 				}
 
-				if (group.size() == 0) {
+				if (group.size() == 0) { //沒有必去縣市
 						List<Integer> reg = new ArrayList<Integer>();
 						for (String nn : n) {
 								if (nn.equals("all")) {
@@ -580,9 +565,9 @@ public class STScheduling {
 
 		private ArrayList<String> insert(HashMap<String, Integer> region, HashMap<Integer, ArrayList<String>> group, List<String> now, int must_size) {
 				ArrayList<String> result = new ArrayList<String>();
-				ArrayList<info> index = getCityIndex(now.toArray(new String[now.size()]));
+				ArrayList<info> index = getCityIndex(now.toArray(new String[now.size()])); //如果有選擇縣市則記錄起來
 
-				if (index.size() == 0) {
+				if (index.size() == 0) { //有bitch景點但是沒有選擇要去的縣市
 						result = Default(group);
 						if (result.size() < now.size()) {
 								result.addAll(fillCounty(result.get(result.size() - 1), now.size() - result.size(), region, result));
@@ -660,6 +645,7 @@ public class STScheduling {
 												break;
 										} else {
 												result.addAll(fillCounty(candi.get(tmp + 1), now.size() - j, region, result));
+												break;
 										}
 
 								}
@@ -1090,32 +1076,41 @@ public class STScheduling {
 
 				HashMap<String, HashMap<String, must>> poiInfo = new HashMap<String, HashMap<String, must>>();
 				List<Map<String, Object>> result = analytics.queryForList("SELECT id,arrival_id,time,stay_time FROM euclid_distance_0826 WHERE " + query + "");
-				for (Map<String, Object> r : result) //取得兩兩景點之間的時間與停留時間
+				
+				if (result.size()<(poi.size()*poi.size())) //若兩兩景點之間停留時間有漏
 				{
-						if (!poiInfo.containsKey(r.get("id").toString())) {
-								HashMap<String, must> tmp = new HashMap<String, must>();
-								must m = new must();
-								try {
-										stay = (int) r.get("stay_time") + (type * 30);
-								} catch (Exception e) {
-										stay = 90 + (type * 30);
-								}
-								m.stay_time = stay;
-								m.time = (int) r.get("time") * 1.5;
-								tmp.put(r.get("arrival_id").toString(), m);
-								poiInfo.put(r.get("id").toString(), tmp);
-						} else {
-								must m = new must();
-								try {
-										stay = (int) r.get("stay_time") + (type * 30);
-								} catch (Exception e) {
-										stay = 90 + (type * 30);
-								}
-								m.stay_time = stay;
-								m.time = (int) r.get("time") * 1.5;
-								poiInfo.get(r.get("id").toString()).put(r.get("arrival_id").toString(), m);
-						}
+					poiInfo = fillDistance(poi,type);
 				}
+				else
+				{
+					for (Map<String, Object> r : result) //取得兩兩景點之間的時間與停留時間
+					{
+							if (!poiInfo.containsKey(r.get("id").toString())) {
+									HashMap<String, must> tmp = new HashMap<String, must>();
+									must m = new must();
+									try {
+											stay = (int) r.get("stay_time") + (type * 30);
+									} catch (Exception e) {
+											stay = 90 + (type * 30);
+									}
+									m.stay_time = stay;
+									m.time = (int) r.get("time") * 1.5;
+									tmp.put(r.get("arrival_id").toString(), m);
+									poiInfo.put(r.get("id").toString(), tmp);
+							} else {
+									must m = new must();
+									try {
+											stay = (int) r.get("stay_time") + (type * 30);
+									} catch (Exception e) {
+											stay = 90 + (type * 30);
+									}
+									m.stay_time = stay;
+									m.time = (int) r.get("time") * 1.5;
+									poiInfo.get(r.get("id").toString()).put(r.get("arrival_id").toString(), m);
+							}
+					}
+				}
+				
 
 				ArrayList<String[]> all = prefix(poi.toArray(new String[poi.size()]), poi.size(), 0);
 				int min = 100000, sum;
@@ -1154,7 +1149,52 @@ public class STScheduling {
 				return tour;
 
 		}
-
+		private HashMap<String, HashMap<String, must>> fillDistance(ArrayList<String> poi,int type)
+		{
+			String str="";
+			for (String p : poi)
+				str+="'" + p + "',";
+			double time=0;
+			HashMap<String, HashMap<String, must>> returnInfo = new HashMap<String, HashMap<String, must>>();
+			List<Map<String, Object>> result = st.queryForList("SELECT A.id,AsText(A.location) AS location,B.stayTime FROM Poi AS A,Statistics AS B WHERE A.id = B.poiId and A.id in ("+str.substring(0,str.lastIndexOf(","))+")");
+			for (Map<String, Object> r : result)
+			{
+				HashMap<String, must> tmp = new HashMap<String, must>(); //A到B點的所有B點相關資訊
+				for (Map<String, Object> r1 : result)
+				{
+					if (r.get("id").toString().equals(r1.get("id")))
+						continue;
+					String[] location = r.get("location").toString().split("\\(|\\)| ");
+					double latitude = 0;
+					double longitude = 0;
+					latitude = Double.parseDouble(location[1]);
+					longitude = Double.parseDouble(location[2]);
+					
+					location = r1.get("location").toString().split("\\(|\\)| ");
+					double latitude1 = 0;
+					double longitude1 = 0;
+					latitude1 = Double.parseDouble(location[1]);
+					longitude1 = Double.parseDouble(location[2]);
+					
+					
+					must m = new must();
+					try {
+							time = (Distance(latitude, longitude, latitude1, longitude1) / 0.6) + (type * 30);
+					} catch (Exception e) {
+							time = 90 + (type * 30);
+					}
+					m.time = time;
+					if (r.get("staytime")==null || "".equals(r.get("staytime").toString()))
+						m.stay_time = 60;
+					else
+						m.stay_time = Double.parseDouble(r.get("staytime").toString().replaceAll("[小時分鐘]", ""))*60;
+					tmp.put(r1.get("id").toString(), m);
+					returnInfo.put(r.get("id").toString(), tmp);
+				}	
+			}	
+				
+			return returnInfo;
+		}
 		private ArrayList<String[]> prefix(String[] array, int n, int k) {
 				ArrayList<String[]> result = new ArrayList<String[]>();
 				if (n == k) {
@@ -1363,7 +1403,7 @@ public class STScheduling {
 				if (poi.getPoiId() == null) //莫名其妙的掛了
 				{
 						result = analytics.queryForList("SELECT county FROM st_scheduling WHERE poiId = '" + before.getPoiId() + "'");
-						result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '" + result.get(0).get("county").toString() + "' and preference IS NOT NULL ORDER BY rand()");
+						result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '" + result.get(0).get("county").toString() + "' and themeId IS NOT NULL ORDER BY rand()");
 						for (Map<String, Object> r : result) {
 								if (checkRule(repeat, r.get("poiId").toString())) {
 										List<Map<String, Object>> result1 = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE poiId = '" + before.getPoiId() + "'");
