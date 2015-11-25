@@ -1222,7 +1222,7 @@ public class STScheduling {
 
 		//避免遇到名稱一樣或相似的POI
 		private boolean checkRule(ArrayList<String> repeat, String pid) {
-				if (repeat.contains(pid) || repeat.contains(poiNames.get(pid)) || poiNames.get(pid).contains("夜市") || poiNames.get(pid).contains("會館") || poiNames.get(pid).contains("飯店") || poiNames.get(pid).contains("旅館") || poiNames.get(pid).contains("旅店")) {
+				if (repeat.contains(pid) || repeat.contains(poiNames.get(pid)) || poiNames.get(pid).contains("夜市") || poiNames.get(pid).contains("會館") || poiNames.get(pid).contains("飯店") || poiNames.get(pid).contains("旅館") || poiNames.get(pid).contains("旅店") || poiNames.get(pid).contains("旅館") || poiNames.get(pid).contains("民宿")) {
 						return false;
 				}
 				for (String r : repeat) {
@@ -1400,7 +1400,7 @@ public class STScheduling {
 								}
 						}
 				}
-				if (poi.getPoiId() == null) //莫名其妙的掛了
+				if (poi.getPoiId() == null) //不符合條件(至少判斷距離)
 				{
 						result = analytics.queryForList("SELECT county FROM st_scheduling WHERE poiId = '" + before.getPoiId() + "'");
 						result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '" + result.get(0).get("county").toString() + "' and themeId IS NOT NULL ORDER BY rand()");
@@ -1416,17 +1416,45 @@ public class STScheduling {
 										double longitude1 = Double.parseDouble(location[2]);
 
 										double time;
-										try {
-												time = (int) (Distance(latitude, longitude, latitude1, longitude1) / 0.75);
-										} catch (Exception e) {
-												time = 30;
-										}
-										poi.setPoiId(r.get("poiId").toString());
-										poi.setStartTime(addTime(before.getEndTime(), time));
-										poi.setEndTime(addTime(poi.getStartTime(), 60));
-										System.out.print("->random2");
+
+										time = (int) (Distance(latitude, longitude, latitude1, longitude1) / 0.6);
+										if (time<=30) //距離30分鐘內可到則保留
+										{
+											poi.setPoiId(r.get("poiId").toString());
+											poi.setStartTime(addTime(before.getEndTime(), time));
+											poi.setEndTime(addTime(poi.getStartTime(), 60));
+											System.out.print("->random2");
+											break;
+											
+										}							
 								}
-						}
+						}	
+				}
+				if (poi.getPoiId() == null) //連距離都不行就隨機挑
+				{
+					result = analytics.queryForList("SELECT county FROM st_scheduling WHERE poiId = '" + before.getPoiId() + "'");
+					result = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE county = '" + result.get(0).get("county").toString() + "' and themeId IS NOT NULL ORDER BY rand()");
+					for (Map<String, Object> r : result) {
+							if (checkRule(repeat, r.get("poiId").toString())) {
+									List<Map<String, Object>> result1 = analytics.queryForList("SELECT poiId,location,stay_time FROM st_scheduling WHERE poiId = '" + before.getPoiId() + "'");
+									String[] location = r.get("location").toString().split("\\(|\\)| ");
+									double latitude = Double.parseDouble(location[1]);
+									double longitude = Double.parseDouble(location[2]);
+
+									location = result1.get(0).get("location").toString().split("\\(|\\)| ");
+									double latitude1 = Double.parseDouble(location[1]);
+									double longitude1 = Double.parseDouble(location[2]);
+
+									double time;
+
+									time = (int) (Distance(latitude, longitude, latitude1, longitude1) / 0.6);
+									poi.setPoiId(r.get("poiId").toString());
+									poi.setStartTime(addTime(before.getEndTime(), time));
+									poi.setEndTime(addTime(poi.getStartTime(), 60));
+									System.out.print("->random3");
+									break;
+							}
+					}	
 				}
 
 				return poi;
