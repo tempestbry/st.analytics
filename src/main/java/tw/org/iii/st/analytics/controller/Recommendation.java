@@ -103,7 +103,7 @@ public class Recommendation {
 			}
 	
 		}
-		else
+		else //相關推薦
 		{
 			//花東場域
 			if (json.getCountyId().contains("TW18") && json.getCountyId().contains("TW19"))
@@ -229,7 +229,7 @@ public class Recommendation {
 					n.checkinsValue = n.checkinsMax - n.checkinsMin;
 					result = integrated(record,n);
 				}
-				else
+				else //沒有在integrated表裡面
 				{
 					rs = commonJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
 					String county = rs.get(0).get("countyId").toString();
@@ -253,6 +253,20 @@ public class Recommendation {
 						}
 					}
 					while (tmp.size()<10);
+					
+					//沒有任何結果時, random
+					if (tmp.size()<10)
+					{
+						rs = commonJdbcTemplate.queryForList("SELECT id FROM Poi WHERE countyId = '"+county+"' and type = '"+json.getReturnType()+"' ORDER by rand() limit 0,20");
+						for (Map<String, Object> i : rs)
+						{
+							if (!tmp.contains(i.get("id").toString()))
+								tmp.add(i.get("id").toString());
+							if (tmp.size()==10)
+								break;
+						}
+					}
+					
 					result = tmp.toArray(new String[tmp.size()]);
 				}
 				
