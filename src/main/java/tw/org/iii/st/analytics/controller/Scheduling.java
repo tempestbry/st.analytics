@@ -452,7 +452,7 @@ public class Scheduling {
 						if (m.find()) {
 								city = Parser(m.group(), "\"long_name\" : \"", "\",", 1);
 								if (!county.containsKey(city)) {
-										return "all";
+										return getCountyPrefix(city,county);
 								} else {
 										return county.get(city);
 								}
@@ -464,7 +464,15 @@ public class Scheduling {
 				}
 
 		}
-
+		private String getCountyPrefix(String city,HashMap<String,String> county)
+		{
+			for (String c : county.keySet())
+			{
+				if (city.substring(0, 2).equals(c.substring(0, 2)))
+					return county.get(c);
+			}
+			return "all";
+		}
 		private TourEvent findTopNear(SchedulingInput json, String pre, int type) throws ParseException {
 				List<Map<String, Object>> result;
 				TourEvent poi = new TourEvent();
