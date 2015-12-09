@@ -9,6 +9,7 @@ import java.net.URL;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+
+
 
 
 
@@ -473,7 +476,7 @@ public class Recommendation {
 		
 	}
 	
-	private String[] FinStBestPOI(RecommendInput json) throws IOException
+	private String[] FinStBestPOI(RecommendInput json) throws IOException, ParseException
 	{
 		
 		ArrayList<String> result = new ArrayList<String>();
@@ -510,9 +513,14 @@ public class Recommendation {
 			do
 			{
 				//themeId NOT LIKE 'FO%' and 
-				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,10");
+				rs = analyticsjdbc.queryForList("SELECT id,type FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,10");
 				for (Map<String, Object> i : rs)
 				{
+					if (i.get("type").toString().equals("2"))
+					{
+						if (checkExpire(i.get("id").toString()))
+							continue;
+					}
 					if (!result.contains(i.get("id").toString()))
 						result.add(i.get("id").toString());
 					if (result.size()==10)
@@ -529,6 +537,26 @@ public class Recommendation {
 			
 		}
 		return result.toArray(new String[result.size()]);
+	}
+	private boolean checkExpire(String poiId) throws IOException, ParseException
+	{
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Date now = new Date();
+		String html = request("http://api.vztaiwan.com/api/Pois/" + poiId, "UTF-8");
+		Pattern p = Pattern.compile("\"endTime\":\".+?\"}");
+		Matcher m = p.matcher(html);
+		
+		String str;
+		while (m.find())
+		{
+			str = m.group().replace("\"endTime\":\"", "").replace("\"}", "");
+			if (sdf.parse(str).before(now))
+				return true;
+		}
+		
+		
+		return false;
+		
 	}
 	private String[] FindBestPOI(timeInfo ti,double px,double py) throws SQLException, ClassNotFoundException, IOException
 	{
