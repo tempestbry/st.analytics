@@ -338,7 +338,7 @@ public class OptimizeSchedule {
 		//String sql = "SELECT px, py FROM scheduling WHERE place_id IN ('" + startPoiID + "', '" + endPoiID + "') ORDER BY FIELD(place_id, '" + startPoiID + "', '" + endPoiID + "')";
 		//String sql = "SELECT px, py FROM place_part_zh_tw WHERE place_id IN ('" + startPoiID + "', '" + endPoiID + "') ORDER BY FIELD(place_id, '" + startPoiID + "', '" + endPoiID + "')";
 		//String sql = "SELECT AsText(A.location) FROM Poi as A, Detail as B where A.detailId = B.id AND B.poiId IN ('" + startPoiID + "', '" + endPoiID + "') ORDER BY FIELD(B.poiId, '" + startPoiID + "', '" + endPoiID + "')";
-		String sql = "SELECT AsText(A.location) FROM Poi as A,  ST_V3_ZH_TW.Detail as B where A.detailId = B.id AND B.poiId IN ('" + startPoiID + "', '" + endPoiID + "') ORDER BY FIELD(B.poiId, '" + startPoiID + "', '" + endPoiID + "')";
+		String sql = "SELECT AsText(A.location) FROM Poi as A where A.id IN ('" + startPoiID + "', '" + endPoiID + "') ORDER BY FIELD(A.id, '" + startPoiID + "', '" + endPoiID + "')";
 		//	System.out.println("SQLTWOPOINT:" + sql);
 
 		List<String> twoGeo = stcjdbcTemplate.queryForList(sql, String.class);
