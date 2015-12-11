@@ -40,7 +40,7 @@ public class CommentIdentify
 	{
 		//System.out.println(comment.replaceAll("<.+?>", ","));
 		String segResult = segmentation(comment.replaceAll("<.+?>", ","));
-		
+//		System.out.println(segResult);
 		String spl[] = segResult.split("\\|"),poi[];
 		
 		//System.out.println(segResult);
