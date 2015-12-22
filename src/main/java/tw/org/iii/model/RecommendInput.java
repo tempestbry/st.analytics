@@ -7,8 +7,14 @@ public class RecommendInput {
 	String poiId;
 	List<String> countyId = new ArrayList();
 	String returnType;
+	int limit=-1;
 	
-	
+	public int getLimit() {
+		return limit;
+	}
+	public void setLimit(int limit) {
+		this.limit = limit;
+	}
 	GeoPoint gps;
 	
 	public RecommendInput(String id,List<String> county,String Type, GeoPoint gps) {
