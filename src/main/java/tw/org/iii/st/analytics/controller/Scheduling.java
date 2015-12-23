@@ -100,18 +100,7 @@ public class Scheduling {
 						 */
 						System.out.println(json.getStartTime());
 						System.out.println(json.getEndTime());
-//			Calendar cal = Calendar.getInstance(); // creates calendar
-//			cal.setTime(si.getStartTime()); // sets calendar time/date
-//			//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
-//			si.setStartTime(cal.getTime());
-//			System.out.println(si.getStartTime());
-//			
-//			System.out.println(si.getEndTime());
-//			cal = Calendar.getInstance(); // creates calendar
-//			cal.setTime(si.getEndTime()); // sets calendar time/date
-//			//cal.add(Calendar.HOUR_OF_DAY, 8); // adds one hour
-//			si.setEndTime(cal.getTime());
-//			System.out.println(si.getEndTime());
+
 
 						tourInfo ti = new tourInfo(index, freetime, json.getStartTime(), json.getEndTime(), json.getGps().getLng(), json.getGps().getLat());
 						ti.weekday = weekday;
@@ -850,7 +839,7 @@ public class Scheduling {
 												+ ti.weekday
 												+ "' and "
 												+ date.getHours()
-												+ "_Oclock = 1 and ("
+												+ "_Oclock = 1 and A.preference1 in ("
 												+ ti.preference + ") and ("
 												+ "" + ti.city + ") and (px IS not null and px <> 0) and (py IS not null and py <>0) GROUP BY fb_id ORDER BY rand() limit 0,40");
 
@@ -899,7 +888,7 @@ public class Scheduling {
 														+ ti.weekday
 														+ "' and "
 														+ date.getHours()
-														+ "_Oclock = 1 and ("
+														+ "_Oclock = 1 and A.preference1 in ("
 														+ ti.preference + ") and ("
 														+ "" + ti.city + ") and (px IS not null and px <> 0) and (py IS not null and py <>0) GROUP BY fb_id ORDER BY rand() limit 0,40");
 						HashMap<String, Integer> tmp = new HashMap<String, Integer>();
@@ -1145,9 +1134,7 @@ public class Scheduling {
 				List<Map<String, Object>> rs = jdbcTemplate.queryForList("SELECT A.arrival_id, A.time, (A.time + A.stay_time) AS totaltime FROM "
 												+ "OpenTimeArray AS B, euclid_distance AS A WHERE A.Id = '"
 												+ PlanResult.get(ti.index - 1).getPoiId()
-												+ "' AND ("
-												+ ti.preference
-												+ ") AND "
+												+ "' AND "
 												+ "(" + ti.city + ") AND "
 												+ "B.Place_Id = A.arrival_id AND (A.time + A.stay_time) < "
 												+ lastTime
