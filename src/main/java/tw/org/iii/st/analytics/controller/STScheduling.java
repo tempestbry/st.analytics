@@ -1451,7 +1451,7 @@ public class STScheduling {
 									poi.setPoiId(r.get("poiId").toString());
 									poi.setStartTime(addTime(before.getEndTime(), time));
 									poi.setEndTime(addTime(poi.getStartTime(), 60));
-									System.out.print("->random3");
+									System.out.print("->random3");									
 									break;
 							}
 					}	

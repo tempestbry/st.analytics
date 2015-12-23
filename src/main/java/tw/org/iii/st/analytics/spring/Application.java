@@ -226,12 +226,33 @@ public class Application extends SpringBootServletInitializer {
 				}
 				HashMap<String, String> term = new HashMap<String, String>();
 				List<Map<String, Object>> rs = analytics.queryForList("SELECT * FROM poiName_new");
-				for (Map<String, Object> r : rs) {
-						if (r.get("name").toString().length() == 1) {
-								continue;
+				for (Map<String, Object> r : rs) 
+				{
+						if (r.get("name").toString().length() == 1)
+						{
+							continue;
 						}
-						term.put(r.get("name").toString(), r.get("poiId").toString());
+						if (!term.containsKey(r.get("name").toString()))
+							term.put(r.get("name").toString(), r.get("poiId").toString());
 				}
+				
+				try {
+					analytics = new JdbcTemplate(dataSourceST());
+				} catch (PropertyVetoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				rs = analytics.queryForList("SELECT name,poiId FROM Detail");
+				for (Map<String, Object> r : rs) 
+				{
+						if (r.get("name").toString().length() == 1 || r.get("name")==null || r.get("poiId")==null)
+						{
+							continue;
+						}
+						if (!term.containsKey(r.get("name").toString()))
+							term.put(r.get("name").toString(), r.get("poiId").toString());
+				}
+				
 				return term;
 		}
 
