@@ -45,6 +45,10 @@ public class CommentIdentify
 	@Qualifier("stJdbcTemplate")
 	private JdbcTemplate stJdbcTemplate;
 	
+	@Autowired
+	@Qualifier("stcJdbcTemplate")
+	private JdbcTemplate stcJdbcTemplate;
+	
 	@RequestMapping("/StartIdentify")
 	private @ResponseBody
 	List<String> startIdentify(@RequestBody String comment)
@@ -70,7 +74,7 @@ public class CommentIdentify
 		}
 		
 		List<String> poiId = new ArrayList<String>();
-		List<Map<String, Object>> result = stJdbcTemplate.queryForList("SELECT id FROM Poi WHERE id in ("+str.substring(0,str.lastIndexOf(","))+") and type <> -1");
+		List<Map<String, Object>> result = stcJdbcTemplate.queryForList("SELECT id FROM Poi WHERE id in ("+str.substring(0,str.lastIndexOf(","))+") and type <> -1");
 		for (Map<String, Object> r : result)
 			 poiId.add(r.get("id").toString());
 		
