@@ -140,7 +140,7 @@ public class Recommendation {
 				{
 					HashMap<String,defaultResult> tmp = new HashMap<String,defaultResult>();
 					List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and id = '"+pid+"'");
-					List<place_info> sql1 = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_name");
+					List<place_info> sql1 = Query2("SELECT IFNULL(fb_id,UUID()) AS uniq,id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_id");
 					for (place_info s : sql) 
 					{
 						double latitude = 0,latitude_tmp;
@@ -243,7 +243,7 @@ public class Recommendation {
 					int value = 100000;
 					do
 					{
-						rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,"+resultPOI+"");
+						rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY uniq ORDER by rand() limit 0,"+resultPOI+"");
 						for (Map<String, Object> i : rs)
 						{
 							if (!tmp.contains(i.get("id").toString()))
@@ -516,7 +516,7 @@ public class Recommendation {
 			do
 			{
 				//themeId NOT LIKE 'FO%' and 
-				rs = analyticsjdbc.queryForList("SELECT id,type FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,"+limit+"");
+				rs = analyticsjdbc.queryForList("SELECT id,type,IFNULL(fb_id,UUID()) AS uniq FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,"+limit+"");
 				for (Map<String, Object> i : rs)
 				{
 					if (i.get("type").toString().equals("2"))
