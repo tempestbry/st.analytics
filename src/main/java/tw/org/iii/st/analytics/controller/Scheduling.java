@@ -61,16 +61,6 @@ public class Scheduling {
 
 		private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 
-		@RequestMapping("/test")
-		public String yyy() {
-				double [] rlt = stScheduling.getDistanceAndTimeBetweenPoi("000861b3-a9d5-87f2-d00c-4e73d8957954", "01f5b21f-174a-8ab4-80b2-481ec940155b");
-				
-				
-				return ""+rlt[0]+","+rlt[1];
-		}
-
-
-
 		@RequestMapping("/QuickPlan")
 		private @ResponseBody
 		List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
@@ -80,7 +70,8 @@ public class Scheduling {
 				long diff = json.getEndTime().getTime() - json.getStartTime().getTime();
 				long diffHours = diff / (60 * 60 * 1000);
 
-				if (json.getCityList().size() == 1 && json.getCityList().get(0).contains("TW18")) {
+				//花東行程規劃 (一天內且為花東景點)
+				if (json.getCityList().contains("TW18") && json.getCityList().contains("TW19") && diffHours<=24) {
 						System.out.println("hualien");
 						//行程規劃結果
 						ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
@@ -95,13 +86,6 @@ public class Scheduling {
 						int freetime = FreeTime(json.getStartTime(), json.getEndTime()); //取得旅程總時間
 						int index = 0;
 
-						/**
-						 * test
-						 */
-						System.out.println(json.getStartTime());
-						System.out.println(json.getEndTime());
-
-
 						tourInfo ti = new tourInfo(index, freetime, json.getStartTime(), json.getEndTime(), json.getGps().getLng(), json.getGps().getLat());
 						ti.weekday = weekday;
 						ti.preference = preference;
@@ -114,18 +98,11 @@ public class Scheduling {
 						} catch (IOException e) {
 						}
 
-						if (json.getEndPoiId() != null || !"".equals(json.getEndPoiId())) {
+						if (json.getEndPoiId() != null || !"".equals(json.getEndPoiId()) || !"null".equals(json.getEndPoiId())) {
 								ti.repeat.add(json.getEndPoiId());
 						}
 						//一般行程規劃(當日)
 						if (json.getTourType() == null || "".equals(json.getTourType()) || !json.getTourType().contains("play-")) {
-//				SimpleDateFormat sdFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-//				TourEvent test = new TourEvent();
-//				test.setPoiId("C1_315081200H_000101");
-//				test.setStartTime(sdFormat.parse("2015/07/20 10:43:28"));
-//				test.setEndTime(sdFormat.parse("2015/07/20 15:43:28"));
-//				PlanResult.add(test);
-//				
 
 								PlanResult.addAll(findTop(ti));
 								ti.repeat.add(PlanResult.get(0).getPoiId()); //將選過的景點加入repeat清單
@@ -134,11 +111,11 @@ public class Scheduling {
 								//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
 								PlanResult = getOtherPOI(PlanResult, ti);
 
-								for (TourEvent t : PlanResult) {
-										List<String> name = placeName("SELECT name FROM Detail WHERE poiId = '" + t.getPoiId() + "'");
-										System.out.println(name.get(0) + "," + t.getPoiId() + "," + t.getStartTime() + ","
-																		+ t.getEndTime());
-								}
+//								for (TourEvent t : PlanResult) {
+//										List<String> name = placeName("SELECT name FROM Detail WHERE poiId = '" + t.getPoiId() + "'");
+//										System.out.println(name.get(0) + "," + t.getPoiId() + "," + t.getStartTime() + ","
+//																		+ t.getEndTime());
+//								}
 
 						} else { //任務模式
 								PlanResult.addAll(getMission1(ti, json.getTourType()));
@@ -794,12 +771,23 @@ public class Scheduling {
 		private String getPreference(List<String> p, HashMap<String, String> mapping) {
 				String preference = "";
 				// 將preference寫入條件
-				for (int i = 0; i < p.size() - 1; i++) {
-						preference += "'" + (!p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "',";
+				if (p.size()==0)
+				{
+					for (int i=10;i<16;i++)
+						preference += "'TH" + i + "',";
+					preference += "'TH16'";
 				}
-				preference += "'" + (!p.get(p.size() - 1).contains("TH") ? mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
-//			preference += "A.preference = '" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "' or ";
-//		preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
+				else
+				{
+					for (int i = 0; i < p.size() - 1; i++) {
+						preference += "'" + (!p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "',";
+//						preference += "A.preference = '" + (p.get(i).contains("TH") ? mapping.get(p.get(i)) : p.get(i)) + "' or ";
+//					preference += "A.preference = '" + (p.get(p.size() - 1).contains("TH") ?  mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
+					}
+					preference += "'" + (!p.get(p.size() - 1).contains("TH") ? mapping.get(p.get(p.size() - 1)) : p.get(p.size() - 1)) + "'";
+				
+				}
+				
 
 				return preference;
 
@@ -1082,7 +1070,7 @@ public class Scheduling {
 										if ("".equals(te.getPoiId()) || te.getPoiId() == null) //還是找不到符合結果
 										{
 
-												if (!"".equals(ti.endPOI) && ti.endPOI != null) {
+												if (!"".equals(ti.endPOI) && ti.endPOI != null && !"null".equals(ti.endPOI)) {
 														te.setPoiId(ti.endPOI);
 														te.setStartTime(addTime(PlanResult.get(ti.index - 1).getEndTime(), toDestination(PlanResult.get(ti.index - 1).getPoiId(), ti.endPOI) == 100000 ? 30
 																						: toDestination(
@@ -1100,7 +1088,7 @@ public class Scheduling {
 										}
 								}
 								if (!ti.repeat.contains(te.getPoiId())) {
-										if (!"".equals(ti.endPOI) && ti.endPOI != null) {
+										if (!"".equals(ti.endPOI) && !"null".equals(ti.endPOI) && ti.endPOI != null) {
 												te.setPoiId(ti.endPOI);
 												te.setStartTime(addTime(PlanResult.get(ti.index - 1).getEndTime(), toDestination(PlanResult.get(ti.index - 1).getPoiId(), ti.endPOI) == 100000 ? 30
 																				: toDestination(PlanResult.get(ti.index - 1).getPoiId(), ti.endPOI)));
@@ -1150,7 +1138,7 @@ public class Scheduling {
 				for (Map<String, Object> i : rs) // 找出目前所在景點可考慮去的鄰近景點候選清單
 				{
 						//沒有目的地
-						if ("".equals(ti.endPOI) || ti.endPOI == null) {
+						if ("".equals(ti.endPOI) || "null".equals(ti.endPOI) || ti.endPOI == null) {
 								if (!ti.repeat.contains(i.get("arrival_id").toString()) && ((double) i.get("totaltime")) < lastTime) // 達成任務就離開
 								{
 										te.setPoiId(i.get("arrival_id").toString());
