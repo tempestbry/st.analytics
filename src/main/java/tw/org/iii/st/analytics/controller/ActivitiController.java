@@ -1,5 +1,6 @@
 package tw.org.iii.st.analytics.controller;
 
+import org.apache.commons.codec.binary.Base64;
 import org.springframework.http.*;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,7 +12,10 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Created by ansonliu on 2016/1/14.
@@ -28,7 +32,7 @@ public class ActivitiController {
 
         HttpHeaders headers = new HttpHeaders();
         try {
-            headers.add("authorization", "Basic "+ Base64.getEncoder().encodeToString("kermit:kermit".getBytes("UTF-8")));
+            headers.add("authorization", "Basic "+ new Base64().encodeToString("kermit:kermit".getBytes("UTF-8")));
         }catch (Exception e){
 
         }
