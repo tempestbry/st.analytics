@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import tw.org.iii.model.SchedulingInput;
+import tw.org.iii.model.SchedulingOutput;
 import tw.org.iii.model.TourEvent;
 import tw.org.iii.model.connection;
 
@@ -182,7 +183,7 @@ public class STScheduling {
 				return rlt;
 		}
 
-		public List<TourEvent> scheduling(SchedulingInput json) {
+		public SchedulingOutput scheduling(SchedulingInput json) {
 
 				ArrayList<String> tourCity;
 				if (checkAuto(json.getCityList()) && json.getMustPoiList().size() == 0) {
@@ -872,7 +873,7 @@ public class STScheduling {
 		/**
 		 * 開始每一天的行程規劃
 		 */
-		private List<TourEvent> startPlan(ArrayList<String> tourCity, SchedulingInput json) throws ParseException {
+		private SchedulingOutput startPlan(ArrayList<String> tourCity, SchedulingInput json) throws ParseException {
 				Date start = json.getStartTime(), end = json.getStartTime(), freeTime;
 				HashMap<String, String> mapping = startMapping();
 				String pre = getPreference(json.getPreferenceList(), mapping); //取得偏好條件
@@ -912,14 +913,19 @@ public class STScheduling {
 						group = getGroup(json.getMustPoiList()); //取得縣市必去景點
 				}
 				List<TourEvent> tourResult = new ArrayList<TourEvent>();
-
+				
+				//記錄景點是否不足
+				TourEvent topResult = new TourEvent();
+				TourEvent otherResult = new TourEvent();
+				String errorMsg="ok";
+				
 				int startIndex = 0;
 
 				int index = 0;
 				ArrayList<String> repeat = new ArrayList<String>();
 				for (String t : tourCity) //每一天的行程
 				{
-						System.out.println("City : " + t);
+						System.out.println("City : " + t + " Time : " + ori_start);
 
 						boolean eatTime = false;
 						freeTime = ori_start;
@@ -927,29 +933,40 @@ public class STScheduling {
 						String spl[] = t.split("\\+");
 						if (!mustCounty(spl, group)) //該縣市是否有必去景點
 						{
-								tourResult.add(index++, FindTop(t, pre, start, repeat, json.getLooseType()));
+							topResult = FindTop(t, pre, start, repeat, json.getLooseType());
+							tourResult.add(index++, topResult);
 
-								//Id跟名稱同時過濾
-								repeat.add(tourResult.get(index - 1).getPoiId());
-								repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
-								System.out.println(poiNames.get(tourResult.get(index - 1).getPoiId()));
-								freeTime = tourResult.get(index - 1).getEndTime();
+							//Id跟名稱同時過濾
+							repeat.add(tourResult.get(index - 1).getPoiId());
+							repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
+							System.out.println(poiNames.get(tourResult.get(index - 1).getPoiId()));
+							freeTime = tourResult.get(index - 1).getEndTime();
+								
+							while (FreeTime(freeTime, end) >= 1) {
+									if (freeTime.getHours() >= 11 && freeTime.getHours() < 13) {
+											eatTime = true;
+									} else {
+											eatTime = false;
+									}
+									//檢查是否景點不夠用
+									otherResult = otherPOI(tourResult.get(index - 1), pre, json.getLooseType(), repeat, eatTime);
+									if (otherResult.getPoiId()==null)
+									{
+										if (tourResult.get(index-1).getPoiId()==topResult.getPoiId())
+											tourResult.remove((index--)-1);
+										errorMsg = "not enough poi";
+										break;
+									}
+									else
+										tourResult.add(otherResult);
+									index++;
 
-								while (FreeTime(freeTime, end) >= 1) {
-										if (freeTime.getHours() >= 11 && freeTime.getHours() < 13) {
-												eatTime = true;
-										} else {
-												eatTime = false;
-										}
-										tourResult.add(otherPOI(tourResult.get(index - 1), pre, json.getLooseType(), repeat, eatTime));
-										index++;
-
-										//Id跟名稱同時過濾
-										repeat.add(tourResult.get(index - 1).getPoiId());
-										repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
-										System.out.println(poiNames.get(tourResult.get(index - 1).getPoiId()));
-										freeTime = tourResult.get(index - 1).getEndTime();
-								}
+									//Id跟名稱同時過濾
+									repeat.add(tourResult.get(index - 1).getPoiId());
+									repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
+									System.out.println(poiNames.get(tourResult.get(index - 1).getPoiId()));
+									freeTime = tourResult.get(index - 1).getEndTime();
+							}
 						} else {
 								if (spl.length > 1) //多縣市
 								{
@@ -958,7 +975,8 @@ public class STScheduling {
 												if (group.containsKey(spl[i - 1])) {
 														tourResult.addAll(MustResult(group.get(spl[i - 1]), start, json.getLooseType()));
 												} else {
-														tourResult.add(FindTop(spl[i - 1], pre, start, repeat, json.getLooseType()));
+													topResult = FindTop(spl[i - 1], pre, start, repeat, json.getLooseType());
+													tourResult.add(topResult);
 												}
 												index = tourResult.size();
 
@@ -973,9 +991,18 @@ public class STScheduling {
 														} else {
 																eatTime = false;
 														}
-														tourResult.add(otherPOI(tourResult.get(index - 1), pre, json.getLooseType(), repeat, eatTime));
+														//檢查是否景點不夠用
+														otherResult = otherPOI(tourResult.get(index - 1), pre, json.getLooseType(), repeat, eatTime);
+														if (otherResult.getPoiId()==null)
+														{
+															if (tourResult.get(index-1).getPoiId()==topResult.getPoiId())
+																tourResult.remove((index--)-1);
+															errorMsg = "not enough poi";
+															break;
+														}
+														else
+															tourResult.add(otherResult);
 														index++;
-
 														//Id跟名稱同時過濾
 														repeat.add(tourResult.get(index - 1).getPoiId());
 														repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
@@ -1014,24 +1041,18 @@ public class STScheduling {
 										}
 								}
 						}
-//			for (int si = startIndex;si<index;si++)
-//			{
-//				System.out.println(poiNames.get(tourResult.get(si).getPoiId()));
-//			}
 						startIndex = index;
 						ori_start = addTime(ori_start, 1440);
 						start = ori_start;
 						freeTime = ori_start;
 						end = addTime(end, 1440);
 				}
-//		for (String ci : tourCity)
-//			System.out.println(ci);
-//		for (TourEvent te : tourResult)
-//		{
-//			System.out.println(te.getPoiId() + " : " + te.getStartTime());
-//		}
 
-				return tourResult;
+
+				SchedulingOutput so = new SchedulingOutput();
+				so.setMessage(errorMsg);
+				so.setPoiList(tourResult);
+				return so;
 
 		}
 

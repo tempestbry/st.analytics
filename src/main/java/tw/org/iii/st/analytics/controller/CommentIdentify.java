@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import tw.org.iii.model.CommentOutput;
+
 import com.chenlb.mmseg4j.CharNode;
 import com.chenlb.mmseg4j.ComplexSeg;
 import com.chenlb.mmseg4j.Dictionary;
@@ -51,34 +53,84 @@ public class CommentIdentify
 	
 	@RequestMapping("/StartIdentify")
 	private @ResponseBody
-	List<String> startIdentify(@RequestBody String comment)
+	CommentOutput startIdentify(@RequestBody String comment)
 	{
-		//System.out.println(comment.replaceAll("<.+?>", ","));
+
 		String segResult = segmentation(comment.replaceAll("<.+?>", ","));
-//		System.out.println(segResult);
 		String spl[] = segResult.split("\\|"),poi[];
-		
-		//System.out.println(segResult);
-		
-		
-		String str="";
+
+		String str=""; //單一對應id的查詢字串
+		String mstr=""; //多重對應id的查詢字串
 		for (String s : spl)
 		{
-//			System.out.println(s);
 			if (terms.containsKey(s))
 			{
-				poi = terms.get(s).split(";");
-				for (String id : poi)
-					str+= "'" + id + "',";
+				poi = terms.get(s).split(";"); //單一個Id
+				if (poi.length==1)
+					str+= "'" + poi[0] + "',";
+				else //多重id (像是鼎泰豐)
+				{
+					for (String id : poi)
+						mstr+= "'" + id + "',";
+				}
+				
 			}
 		}
 		
-		List<String> poiId = new ArrayList<String>();
-		List<Map<String, Object>> result = stcJdbcTemplate.queryForList("SELECT id FROM Poi WHERE id in ("+str.substring(0,str.lastIndexOf(","))+") and type <> -1");
-		for (Map<String, Object> r : result)
-			 poiId.add(r.get("id").toString());
+		List<String> countyId = getCounty(comment);
 		
-		return poiId;
+		//輸出結果模型
+		CommentOutput co = new CommentOutput();
+		
+		//單一Id結果
+		List<Map<String, Object>> result;
+		List<String> poiId = new ArrayList<String>();
+		if (!"".equals(str))
+		{
+			result = stcJdbcTemplate.queryForList("SELECT id,countyId FROM ST_V3_COMMON.Poi WHERE id in ("+str.substring(0,str.lastIndexOf(","))+") and type <> -1");
+			if (countyId.size()==0)//若遊記中未提到縣市, 則全部景點都考量
+			{
+				for (Map<String, Object> r : result)
+					poiId.add(r.get("id").toString());
+			}
+			else //若遊記中有提到縣市, 則限縮縣市
+			{
+				for (Map<String, Object> r : result)
+					if (countyId.contains(r.get("countyId")))
+						poiId.add(r.get("id").toString());			
+			}
+			co.setPoiList(poiId);
+			poiId=new ArrayList<String>();
+		}
+		if (!"".equals(mstr))
+		{
+			result = stcJdbcTemplate.queryForList("SELECT id,countyId FROM ST_V3_COMMON.Poi WHERE id in ("+mstr.substring(0,mstr.lastIndexOf(","))+") and type <> -1");
+			if (countyId.size()==0)//若遊記中未提到縣市, 則全部景點都考量
+			{
+				for (Map<String, Object> r : result)
+					poiId.add(r.get("id").toString());
+			}
+			else //若遊記中有提到縣市, 則限縮縣市
+			{
+				for (Map<String, Object> r : result)
+					if (countyId.contains(r.get("countyId")))
+						poiId.add(r.get("id").toString());			
+			}
+			co.setPoiList(poiId);
+		}
+		
+		return co;
+	}
+	private List<String> getCounty(String comment)
+	{
+		List<String> county = new ArrayList<String>();
+		List<Map<String, Object>> result = analytics.queryForList("SELECT countyId,name FROM poiName_location");
+		for (Map<String, Object> r : result)
+		{
+			if (comment.contains(r.get("name").toString()))
+				county.add(r.get("countyId").toString());
+		}
+		return county;
 	}
 	private String segmentation(String comment)
 	{
@@ -171,7 +223,7 @@ public class CommentIdentify
 	private HashMap<String, String> readTerms() {
 		
 		HashMap<String, String> term = new HashMap<String, String>();
-		List<Map<String, Object>> rs = analytics.queryForList("SELECT * FROM poiName_new");
+		List<Map<String, Object>> rs = analytics.queryForList("SELECT * FROM poiName");
 		for (Map<String, Object> r : rs) 
 		{
 				if (r.get("name").toString().length() == 1)

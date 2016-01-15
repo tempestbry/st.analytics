@@ -28,6 +28,7 @@ import org.springframework.scheduling.quartz.CronTriggerFactoryBean;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
+import tw.org.iii.st.analytics.controller.RecomendationBackend;
 import tw.org.iii.st.analytics.controller.STScheduling;
 //import tw.org.iii.st.analytics.controller.STScheduling;
 import tw.org.iii.st.analytics.cronjob.UpdateRecommendation;
@@ -214,6 +215,10 @@ public class Application extends SpringBootServletInitializer {
 		public STScheduling stscheduling() {
 				return new STScheduling();
 		}
+		@Bean(name = "RecomendationBackend")
+		public RecomendationBackend recommendationBackend() {
+				return new RecomendationBackend();
+		}
 
 		@Bean(name = "readTerms")
 		public HashMap<String, String> readTerms() {
@@ -225,7 +230,7 @@ public class Application extends SpringBootServletInitializer {
 						e.printStackTrace();
 				}
 				HashMap<String, String> term = new HashMap<String, String>();
-				List<Map<String, Object>> rs = analytics.queryForList("SELECT * FROM poiName_new");
+				List<Map<String, Object>> rs = analytics.queryForList("SELECT * FROM poiName");
 				for (Map<String, Object> r : rs) 
 				{
 						if (r.get("name").toString().length() == 1)

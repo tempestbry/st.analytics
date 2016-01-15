@@ -108,6 +108,21 @@
             <version>1.10.0</version>
         </dependency>
 
+		<!-- colt -->
+		<dependency>
+			<groupId>colt</groupId>
+			<artifactId>colt</artifactId>
+			<version>1.2.0</version>
+		</dependency>
+		
+		<!-- common math -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-math3</artifactId>
+			<version>3.6</version>
+		</dependency>
+		
+
     </dependencies>
 
 

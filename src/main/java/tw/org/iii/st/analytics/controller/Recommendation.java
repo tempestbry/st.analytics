@@ -35,6 +35,7 @@ import org.springframework.jdbc.core.RowMapper;
 
 
 
+
 import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.RecommendInfo;
 import tw.org.iii.model.RecommendInput;
@@ -53,35 +54,19 @@ public class Recommendation {
 	@Autowired
 	@Qualifier("analyticsJdbcTemplate")
 	private JdbcTemplate analyticsjdbc;
+
+	@Autowired
+	@Qualifier("RecomendationBackend")
+	private RecomendationBackend backend;
 	
-	//test
 	
-//	@RequestMapping("/ThisTime")
-//	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
-//	{
-//		timeInfo ti = getWeekday();
-//		String[] result = FindBestPOI(ti,px,py);
-//		
-//		return result;
-//	}
-//	
-//	@RequestMapping("/Related")
-//	public String[] relatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
-//	{
-//		List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
-//				+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county ORDER BY total DESC LIMIT 0,5");
-//		
-//		
-//		int i=0;
-//		String result[] = new String[5];
-//		for (RecommendInfo ri : sqlresult) 
-//		{
-//			result[i++] = ri.getRecommendID();
-//		}
-//				
-//		return result;
-//      
-//	}
+	@RequestMapping("/StartBackend")
+	public void StartBackend()
+	{
+		backend.StartBackend();
+	}
+	
+	
 	
 	@RequestMapping("/Related")
 	public String[] relatedRecommendation(@RequestBody RecommendInput json) throws ClassNotFoundException, SQLException, NumberFormatException, IOException, ParseException

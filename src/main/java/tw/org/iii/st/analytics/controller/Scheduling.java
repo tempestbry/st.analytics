@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tw.org.iii.model.GeoPoint;
 import tw.org.iii.model.RecommendInput;
 import tw.org.iii.model.SchedulingInput;
+import tw.org.iii.model.SchedulingOutput;
 import tw.org.iii.model.TourEvent;
 import tw.org.iii.st.analytics.spring.Application;
 
@@ -63,9 +64,9 @@ public class Scheduling {
 
 		@RequestMapping("/QuickPlan")
 		private @ResponseBody
-		List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
+		SchedulingOutput StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
 
-				List<TourEvent> finalResult = new ArrayList<TourEvent>();
+			SchedulingOutput finalResult = new SchedulingOutput();
 
 				long diff = json.getEndTime().getTime() - json.getStartTime().getTime();
 				long diffHours = diff / (60 * 60 * 1000);
@@ -132,11 +133,11 @@ public class Scheduling {
 								}
 
 						}
+						SchedulingOutput so = new SchedulingOutput();
+						so.setMessage("ok");
+						so.setPoiList(PlanResult);
 
-						finalResult = new ArrayList<TourEvent>();
-						finalResult.addAll(PlanResult);
-
-						return finalResult;
+						return so;
 				} else if (json.getCityList().size() == 1 && (diffHours) < 11) {
 						finalResult = OneDayScheduling(json);
 						return finalResult;
@@ -144,14 +145,21 @@ public class Scheduling {
 //			
 						System.out.println("multi day");
 						finalResult = stScheduling.scheduling(json);
+						for (TourEvent t : finalResult.getPoiList())
+						{
+							System.out.println(t.getStartTime() + "," + t.getEndTime() + "," + t.getPoiId());
+						}
+						
 						return finalResult;
 						//return null;
 				}
 
 		}
 
-		private List<TourEvent> OneDayScheduling(SchedulingInput json) throws ParseException, IOException {
+		private SchedulingOutput OneDayScheduling(SchedulingInput json) throws ParseException, IOException {
 				List<TourEvent> tourResult = new ArrayList<TourEvent>();
+				SchedulingOutput so = new SchedulingOutput();
+				
 				Date freeTime = json.getStartTime();
 				ArrayList<String> repeat = new ArrayList<String>();
 				//確認縣市
@@ -205,8 +213,9 @@ public class Scheduling {
 												}
 												tourResult.add(t);
 										}
-
-										return tourResult;
+										so.setMessage("ok");
+										so.setPoiList(tourResult);
+										return so;
 //					}
 //					else //如果不是, 則將
 //					{
@@ -260,8 +269,9 @@ public class Scheduling {
 								System.out.println(freeTime);
 						}
 				}
-
-				return tourResult;
+				so.setMessage("ok");
+				so.setPoiList(tourResult);
+				return so;
 
 		}
 
