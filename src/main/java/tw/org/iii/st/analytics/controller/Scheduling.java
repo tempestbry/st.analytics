@@ -62,9 +62,128 @@ public class Scheduling {
 
 		private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 
+		
+		
+		
+		
 		@RequestMapping("/QuickPlan")
 		private @ResponseBody
-		SchedulingOutput StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
+		List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
+
+			SchedulingOutput finalResult = new SchedulingOutput();
+
+				long diff = json.getEndTime().getTime() - json.getStartTime().getTime();
+				long diffHours = diff / (60 * 60 * 1000);
+
+				//花東行程規劃 (一天內且為花東景點)
+				if (json.getCityList().contains("TW18") && json.getCityList().contains("TW19") && diffHours<=24) {
+						System.out.println("hualien");
+						//行程規劃結果
+						ArrayList<TourEvent> PlanResult = new ArrayList<TourEvent>();
+						int lastTime;
+
+						HashMap<String, String> mapping = startMapping(); //建立新舊preference比照表
+						ArrayList<String> repeat = new ArrayList<String>();
+						String city = getCity(json.getCityList()); //取得city
+						String preference = getPreference(json.getPreferenceList(), mapping); //取得preference
+						String weekday = getWeekday(json.getStartTime()); //知道當天星期幾
+
+						int freetime = FreeTime(json.getStartTime(), json.getEndTime()); //取得旅程總時間
+						int index = 0;
+
+						tourInfo ti = new tourInfo(index, freetime, json.getStartTime(), json.getEndTime(), json.getGps().getLng(), json.getGps().getLat());
+						ti.weekday = weekday;
+						ti.preference = preference;
+						ti.city = city;
+						ti.startPOI = json.getStartPoiId();
+						ti.endPOI = json.getEndPoiId();
+
+						try {
+								ti.flag = askGoogle(ti.px, ti.py);
+						} catch (IOException e) {
+						}
+
+						if (json.getEndPoiId() != null || !"".equals(json.getEndPoiId()) || !"null".equals(json.getEndPoiId())) {
+								ti.repeat.add(json.getEndPoiId());
+						}
+						//一般行程規劃(當日)
+						if (json.getTourType() == null || "".equals(json.getTourType()) || !json.getTourType().contains("play-")) {
+
+								PlanResult.addAll(findTop(ti));
+								ti.repeat.add(PlanResult.get(0).getPoiId()); //將選過的景點加入repeat清單
+								ti.index = PlanResult.size(); //index推進
+
+								//freetime = FreeTime(PlanResult.get(index - 1).getEndTime(),si.getEndTime() );
+								PlanResult = getOtherPOI(PlanResult, ti);
+
+//								for (TourEvent t : PlanResult) {
+//										List<String> name = placeName("SELECT name FROM Detail WHERE poiId = '" + t.getPoiId() + "'");
+//										System.out.println(name.get(0) + "," + t.getPoiId() + "," + t.getStartTime() + ","
+//																		+ t.getEndTime());
+//								}
+
+						} else { //任務模式
+								PlanResult.addAll(getMission1(ti, json.getTourType()));
+								for (TourEvent r : PlanResult) {
+										ti.repeat.add(r.getPoiId()); //將選過的景點加入repeat清單
+								}
+								ti.index = PlanResult.size(); //index推進
+
+								//freetime = FreeTime(PlanResult.get(2).getEndTime(),si.getEndTime());
+								PlanResult = getOtherPOI(PlanResult, ti);
+								for (TourEvent t : PlanResult) {
+										System.out.println(t.getPoiId() + "," + t.getStartTime() + ","
+																		+ t.getEndTime());
+								}
+
+						}
+						SchedulingOutput so = new SchedulingOutput();
+						so.setMessage("ok");
+						so.setPoiList(PlanResult);
+
+						return so.getPoiList();
+				} else if (json.getCityList().size() == 1 && (diffHours) < 11) {
+						finalResult = OneDayScheduling(json);
+						return finalResult.getPoiList();
+				} else {
+//			
+						System.out.println("multi day");
+						finalResult = stScheduling.scheduling(json);
+						for (TourEvent t : finalResult.getPoiList())
+						{
+							System.out.println(t.getStartTime() + "," + t.getEndTime() + "," + t.getPoiId());
+						}
+						
+						return finalResult.getPoiList();
+						//return null;
+				}
+
+		}
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		/**==========================分隔線以下是V2======================================*/
+		
+		
+		@RequestMapping("/QuickPlanV2")
+		private @ResponseBody
+		SchedulingOutput StartPlanV2(@RequestBody SchedulingInput json) throws ParseException, ClassNotFoundException, SQLException, IOException {
 
 			SchedulingOutput finalResult = new SchedulingOutput();
 

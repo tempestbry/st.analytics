@@ -53,7 +53,51 @@ public class CommentIdentify
 	
 	@RequestMapping("/StartIdentify")
 	private @ResponseBody
-	CommentOutput startIdentify(@RequestBody String comment)
+	List<String> startIdentify(@RequestBody String comment)
+	{
+
+		String segResult = segmentation(comment.replaceAll("<.+?>", ","));
+		String spl[] = segResult.split("\\|"),poi[];
+
+		String str=""; //單一對應id的查詢字串
+		for (String s : spl)
+		{
+			if (terms.containsKey(s))
+			{
+				poi = terms.get(s).split(";"); //單一個Id
+				for (String id : poi)
+					str+= "'" + id + "',";
+			}
+		}
+		
+		List<String> countyId = getCounty(comment);
+		
+		//單一Id結果
+		List<Map<String, Object>> result;
+		List<String> poiId = new ArrayList<String>();
+		if (!"".equals(str))
+		{
+			result = stcJdbcTemplate.queryForList("SELECT id,countyId FROM ST_V3_COMMON.Poi WHERE id in ("+str.substring(0,str.lastIndexOf(","))+") and type <> -1");
+			if (countyId.size()==0)//若遊記中未提到縣市, 則全部景點都考量
+			{
+				for (Map<String, Object> r : result)
+					poiId.add(r.get("id").toString());
+			}
+			else //若遊記中有提到縣市, 則限縮縣市
+			{
+				for (Map<String, Object> r : result)
+					if (countyId.contains(r.get("countyId")))
+						poiId.add(r.get("id").toString());			
+			}
+		}
+		
+		return poiId;
+	}
+	
+	
+	@RequestMapping("/StartIdentifyV2")
+	private @ResponseBody
+	CommentOutput startIdentifyV2(@RequestBody String comment)
 	{
 
 		String segResult = segmentation(comment.replaceAll("<.+?>", ","));
@@ -116,7 +160,7 @@ public class CommentIdentify
 					if (countyId.contains(r.get("countyId")))
 						poiId.add(r.get("id").toString());			
 			}
-			co.setPoiList(poiId);
+			co.setMultiPoiList(poiId);
 		}
 		
 		return co;
