@@ -24,18 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
-
-
-
-
-
-
-
-
-
-
-
-
 import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.RecommendInfo;
 import tw.org.iii.model.RecommendInput;
@@ -176,28 +164,23 @@ public class Recommendation {
 				else
 					resultPOI = json.getLimit();
 				
-				
-				
 				normalize n = new normalize();
-				double cb,ar,checkins;
+				double cb,checkins;
 				HashMap<String,info> record = new HashMap<String,info>();
-				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
+				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,checkins FROM related_recommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
 				if (rs.size()>0)
 				{
 					boolean flag = true;
 					for (Map<String, Object> r : rs) 
 					{
 						cb = Double.parseDouble(r.get("cb")+"");
-						ar = Double.parseDouble(r.get("ar")+"");
-						checkins = Double.parseDouble(r.get("top")+"");
-						info i = new info(cb,ar,checkins);
+						checkins = Double.parseDouble(r.get("checkins")+"");
+						info i = new info(cb,checkins);
 						record.put(r.get("related_id").toString(), i);
 						if (flag)
 						{
 							n.cbMax = cb;
 							n.cbMin = cb;
-							n.arMax = ar;
-							n.arMin = ar;
 							n.checkinsMax = checkins;
 							n.checkinsMin = checkins;
 							flag = false;
@@ -206,17 +189,12 @@ public class Recommendation {
 							n.cbMax = cb;
 						if (cb < n.cbMin)
 							n.cbMin = cb;
-						if (ar > n.arMax)
-							n.arMax = ar;
-						if (ar < n.arMin)
-							n.arMin = ar;
 						if (checkins > n.checkinsMax)
 							n.checkinsMax = checkins;
 						if (checkins < n.checkinsMin)
 							n.checkinsMin = checkins;
 					}
 					n.cbValue = n.cbMax - n.cbMin;
-					n.arValue = n.arMax - n.arMin;
 					n.checkinsValue = n.checkinsMax - n.checkinsMin;
 					result = integrated(record,n,resultPOI);
 				}
@@ -228,7 +206,8 @@ public class Recommendation {
 					int value = 100000;
 					do
 					{
-						rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY uniq ORDER by rand() limit 0,"+resultPOI+"");
+						rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' and countyId ='"+county+"' ORDER by rand() limit 0,"+resultPOI+"");
+//						rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY uniq ORDER by rand() limit 0,"+resultPOI+"");
 						for (Map<String, Object> i : rs)
 						{
 							if (!tmp.contains(i.get("id").toString()))
@@ -261,6 +240,94 @@ public class Recommendation {
 					result = tmp.toArray(new String[tmp.size()]);
 				}
 				
+//				normalize n = new normalize();
+//				double cb,ar,checkins;
+//				HashMap<String,info> record = new HashMap<String,info>();
+//				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,checkins FROM related_recommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
+//				if (rs.size()>0)
+//				{
+//					boolean flag = true;
+//					for (Map<String, Object> r : rs) 
+//					{
+//						cb = Double.parseDouble(r.get("cb")+"");
+//						ar = Double.parseDouble(r.get("ar")+"");
+//						checkins = Double.parseDouble(r.get("checkins")+"");
+//						info i = new info(cb,ar,checkins);
+//						record.put(r.get("related_id").toString(), i);
+//						if (flag)
+//						{
+//							n.cbMax = cb;
+//							n.cbMin = cb;
+//							n.arMax = ar;
+//							n.arMin = ar;
+//							n.checkinsMax = checkins;
+//							n.checkinsMin = checkins;
+//							flag = false;
+//						}
+//						if (cb > n.cbMax)
+//							n.cbMax = cb;
+//						if (cb < n.cbMin)
+//							n.cbMin = cb;
+//						if (ar > n.arMax)
+//							n.arMax = ar;
+//						if (ar < n.arMin)
+//							n.arMin = ar;
+//						if (checkins > n.checkinsMax)
+//							n.checkinsMax = checkins;
+//						if (checkins < n.checkinsMin)
+//							n.checkinsMin = checkins;
+//					}
+//					n.cbValue = n.cbMax - n.cbMin;
+//					n.arValue = n.arMax - n.arMin;
+//					n.checkinsValue = n.checkinsMax - n.checkinsMin;
+//					result = integrated(record,n,resultPOI);
+//				}
+//				else //沒有在integrated表裡面
+//				{
+//					rs = commonJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
+//					String county = rs.get(0).get("countyId").toString();
+//					ArrayList<String> tmp = new ArrayList<String>();
+//					int value = 100000;
+//					do
+//					{
+//						rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY uniq ORDER by rand() limit 0,"+resultPOI+"");
+//						for (Map<String, Object> i : rs)
+//						{
+//							if (!tmp.contains(i.get("id").toString()))
+//								tmp.add(i.get("id").toString());
+//							if (tmp.size()==resultPOI)
+//								break;
+//						}
+//							
+//						value-=5000;
+//						if (value < 0)
+//						{
+//							break;
+//						}
+//					}
+//					while (tmp.size()<resultPOI);
+//					
+//					//沒有任何結果時, random
+//					if (tmp.size()<resultPOI)
+//					{
+//						rs = commonJdbcTemplate.queryForList("SELECT id FROM Poi WHERE countyId = '"+county+"' and type = '"+json.getReturnType()+"' ORDER by rand()");
+//						for (Map<String, Object> i : rs)
+//						{
+//							if (!tmp.contains(i.get("id").toString()))
+//								tmp.add(i.get("id").toString());
+//							if (tmp.size()==resultPOI)
+//								break;
+//						}
+//					}
+//					
+//					result = tmp.toArray(new String[tmp.size()]);
+//				}
+				
+				
+				
+				
+				
+				
 				
 			}
 			
@@ -273,7 +340,7 @@ public class Recommendation {
 	}
 	private String[] integrated(HashMap<String,info> record,normalize n,int limit)
 	{
-		double cb,ar,ch;
+		double cb,ch;
 		HashMap<String,Double> tmp = new HashMap<String,Double>();
 		for (String r : record.keySet())
 		{
@@ -282,16 +349,16 @@ public class Recommendation {
 				cb = 0;
 			else
 				cb = ((i.cb - n.cbMin) / n.cbValue);
-			if ((i.ar - n.arMin)==0 || n.arValue==0)
-				ar = 0;
-			else
-				ar = ((i.ar - n.arMin) / n.arValue);
+//			if ((i.ar - n.arMin)==0 || n.arValue==0)
+//				ar = 0;
+//			else
+//				ar = ((i.ar - n.arMin) / n.arValue);
 			if ((i.checkins - n.checkinsMin)==0 || n.checkinsValue==0)
 				ch = 0;
 			else
 				ch = ((i.checkins - n.checkinsMin) / n.checkinsValue);
 			
-			tmp.put(r, 0.5*cb + 0.1*ar + 0.4*ch);
+			tmp.put(r, 0.4*cb + 0.6*ch);
 		}
 		
 		List<Map.Entry<String, Integer>> rank = sortDouble(tmp);
@@ -333,13 +400,13 @@ public class Recommendation {
 	}
 	private class info
 	{
-		private info(double c,double a,double ch)
+		private info(double c,double ch)
 		{
 			this.cb = c;
-			this.ar = a;
+//			this.ar = a;
 			this.checkins =ch;
 		}
-		double cb,ar,checkins;
+		double cb,checkins;
 	}
 	
 	private class defaultResult
@@ -463,7 +530,13 @@ public class Recommendation {
 		return results.toString();
 		
 	}
-	
+	private String getQueryString(List<String> l)
+	{
+		String returnString="";
+		for (String ll : l)
+			returnString = "'" + ll + "',";
+		return returnString.substring(0,returnString.lastIndexOf(","));
+	}
 	private String[] FinStBestPOI(RecommendInput json,int limit) throws IOException, ParseException
 	{
 		
@@ -475,10 +548,8 @@ public class Recommendation {
 			int value = 100000;
 			do
 			{
-				//themeId NOT LIKE 'FO%' and 
-				
-				//SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= 0 and type in (2) GROUP BY uniq ORDER by rand() limit 0,10
-				rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,"+limit+"");
+				rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' ORDER by rand() limit 0,"+limit+"");
+//				rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,"+limit+"");
 				for (Map<String, Object> i : rs)
 				{
 					if (!result.contains(i.get("id").toString()))
@@ -501,10 +572,10 @@ public class Recommendation {
 			do
 			{
 				//themeId NOT LIKE 'FO%' and 
-				rs = analyticsjdbc.queryForList("SELECT id,type,IFNULL(fb_id,UUID()) AS uniq FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,"+limit+"");
+				rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' and countyId in ("+getQueryString(json.getCountyId())+") ORDER by rand() limit 0,"+limit+"");
 				for (Map<String, Object> i : rs)
 				{
-					if (i.get("type").toString().equals("2"))
+					if (i.get("type").toString().equals("2")) //檢查活動時間是否過期
 					{
 						if (checkExpire(i.get("id").toString()))
 							continue;
