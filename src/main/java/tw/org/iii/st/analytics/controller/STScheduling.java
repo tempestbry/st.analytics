@@ -185,7 +185,7 @@ public class STScheduling {
 
 		public SchedulingOutput scheduling(SchedulingInput json) {
 
-				ArrayList<String> tourCity;
+				List<String> tourCity;
 				if (checkAuto(json.getCityList()) && json.getMustPoiList().size() == 0) {
 						tourCity = AutoReco(json); //不指定縣市
 				} else {
@@ -340,10 +340,10 @@ public class STScheduling {
 				return list_Data;
 		}
 
-		private ArrayList<String> ExistCity(SchedulingInput json) {
+		private List<String> ExistCity(SchedulingInput json) {
 				String str = "";
 				List<String> must = json.getMustPoiList();
-				ArrayList<String> mustCounty = new ArrayList<String>();
+				List<String> mustCounty = new ArrayList<String>();
 				if (must.size() > 0) {
 						for (int i = 0; i < must.size() - 1; i++) {
 								str += "poiId = '" + must.get(i) + "' or ";
@@ -351,7 +351,14 @@ public class STScheduling {
 						str += "poiId = '" + must.get(must.size() - 1) + "'";
 						mustCounty = getMustCounty(str); //取得必去景點所在的縣市
 				}
-
+				
+				//檢查必去景點的縣市是否存在於指定縣市了
+				for (int i=0;i<mustCounty.size();i++)
+				{
+					 if (json.getCityList().contains(mustCounty.get(i)))
+						 mustCounty.remove(i);
+				}
+				
 				mustCounty = POIGroupAndSort(json.getCityList(), mustCounty);
 				//mustCounty = order(mustCounty,json);
 
@@ -369,7 +376,7 @@ public class STScheduling {
 				return county;
 		}
 
-		private ArrayList<String> POIGroupAndSort(List<String> n, ArrayList<String> m) {
+		private ArrayList<String> POIGroupAndSort(List<String> n, List<String> m) {
 				HashMap<String, Integer> region = new HashMap<String, Integer>();
 				region.put("TW1", 0); region.put("TW2", 0); region.put("TW3", 0); //北北基
 				region.put("TW4", 1); region.put("TW5", 1); region.put("TW6", 1); region.put("TW7", 1);//桃竹苗
@@ -873,7 +880,7 @@ public class STScheduling {
 		/**
 		 * 開始每一天的行程規劃
 		 */
-		private SchedulingOutput startPlan(ArrayList<String> tourCity, SchedulingInput json) throws ParseException {
+		private SchedulingOutput startPlan(List<String> tourCity, SchedulingInput json) throws ParseException {
 				Date start = json.getStartTime(), end = json.getStartTime(), freeTime;
 				HashMap<String, String> mapping = startMapping();
 				String pre = getPreference(json.getPreferenceList(), mapping); //取得偏好條件
@@ -973,7 +980,7 @@ public class STScheduling {
 										for (int i = 1; i <= spl.length; i++) //每一個縣市
 										{
 												if (group.containsKey(spl[i - 1])) {
-														tourResult.addAll(MustResult(group.get(spl[i - 1]), start, json.getLooseType()));
+														tourResult.addAll(MustResult(group.get(spl[i - 1]), start, json.getLooseType(),repeat));
 												} else {
 													topResult = FindTop(spl[i - 1], pre, start, repeat, json.getLooseType());
 													tourResult.add(topResult);
@@ -1015,7 +1022,7 @@ public class STScheduling {
 
 								} else //一個縣市
 								{
-										tourResult.addAll(MustResult(group.get(spl[0]), start, json.getLooseType()));
+										tourResult.addAll(MustResult(group.get(spl[0]), start, json.getLooseType(),repeat));
 										index = tourResult.size();
 
 										//Id跟名稱同時過濾
@@ -1071,9 +1078,9 @@ public class STScheduling {
 				double time;
 		}
 
-		private List<TourEvent> MustResult(ArrayList<String> poi, Date start, int type) throws ParseException {
+		private List<TourEvent> MustResult(ArrayList<String> poi, Date start, int type,List<String> repeat) throws ParseException {
 				List<TourEvent> tour = new ArrayList<TourEvent>();
-				if (poi.size() == 1) {
+				if (poi.size() == 1 && !repeat.contains(poi.get(0))) {
 						TourEvent t = new TourEvent();
 						t.setPoiId(poi.get(0));
 						t.setStartTime(start);
@@ -1163,7 +1170,8 @@ public class STScheduling {
 								t.setStartTime(addTime(end, time));
 								t.setEndTime(addTime(t.getStartTime(), stay));
 						}
-						tour.add(t);
+						if (!repeat.contains(t.getPoiId()))
+							tour.add(t);
 
 				}
 
