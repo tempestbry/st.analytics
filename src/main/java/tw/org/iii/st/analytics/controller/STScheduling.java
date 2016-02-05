@@ -980,7 +980,13 @@ public class STScheduling {
 										for (int i = 1; i <= spl.length; i++) //每一個縣市
 										{
 												if (group.containsKey(spl[i - 1])) {
+													if (checkMustPOI(group.get(spl[i - 1]),repeat))
 														tourResult.addAll(MustResult(group.get(spl[i - 1]), start, json.getLooseType(),repeat));
+													else
+													{
+														topResult = FindTop(spl[i - 1], pre, start, repeat, json.getLooseType());
+														tourResult.add(topResult);
+													}	
 												} else {
 													topResult = FindTop(spl[i - 1], pre, start, repeat, json.getLooseType());
 													tourResult.add(topResult);
@@ -1022,7 +1028,10 @@ public class STScheduling {
 
 								} else //一個縣市
 								{
+									if (checkMustPOI(group.get(spl[0]),repeat))
 										tourResult.addAll(MustResult(group.get(spl[0]), start, json.getLooseType(),repeat));
+									else
+										tourResult.add(FindTop(t, pre, start, repeat, json.getLooseType()));
 										index = tourResult.size();
 
 										//Id跟名稱同時過濾
@@ -1062,7 +1071,17 @@ public class STScheduling {
 				return so;
 
 		}
-
+		private boolean checkMustPOI(List<String> must,List<String> repeat)
+		{
+			//檢查是否該縣市的必去景點都用完
+			for (String m : must)
+			{
+				if (!repeat.contains(m))
+					return true;
+			}
+			return false;
+				
+		}
 		private boolean mustCounty(String spl[], HashMap<String, ArrayList<String>> group) {
 				for (String s : spl) {
 						if (group.containsKey(s)) {
@@ -1080,7 +1099,7 @@ public class STScheduling {
 
 		private List<TourEvent> MustResult(ArrayList<String> poi, Date start, int type,List<String> repeat) throws ParseException {
 				List<TourEvent> tour = new ArrayList<TourEvent>();
-				if (poi.size() == 1 && !repeat.contains(poi.get(0))) {
+				if (poi.size() == 1 && !repeat.contains(poi.get(0))) { //只有一個必去景點且已經包含在
 						TourEvent t = new TourEvent();
 						t.setPoiId(poi.get(0));
 						t.setStartTime(start);
