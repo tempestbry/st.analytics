@@ -942,7 +942,14 @@ public class STScheduling {
 						{
 							topResult = FindTop(t, pre, start, repeat, json.getLooseType());
 							tourResult.add(index++, topResult);
-
+								
+							//檢查必去景點是否用完
+							if (tourResult.get(index - 1).getPoiId()==null)
+							{
+								errorMsg = "not enough poi";
+								break;
+							}
+							
 							//Id跟名稱同時過濾
 							repeat.add(tourResult.get(index - 1).getPoiId());
 							repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
@@ -992,7 +999,12 @@ public class STScheduling {
 													tourResult.add(topResult);
 												}
 												index = tourResult.size();
-
+												if (tourResult.get(index - 1).getPoiId()==null)
+												{
+													errorMsg = "not enough poi";
+													break;
+												}
+												
 												//Id跟名稱同時過濾
 												repeat.add(tourResult.get(index - 1).getPoiId());
 												repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
@@ -1033,7 +1045,11 @@ public class STScheduling {
 									else
 										tourResult.add(FindTop(t, pre, start, repeat, json.getLooseType()));
 										index = tourResult.size();
-
+										if (tourResult.get(index - 1).getPoiId()==null)
+										{
+											errorMsg = "not enough poi";
+											break;
+										}
 										//Id跟名稱同時過濾
 										repeat.add(tourResult.get(index - 1).getPoiId());
 										repeat.add(poiNames.get(tourResult.get(index - 1).getPoiId()));
