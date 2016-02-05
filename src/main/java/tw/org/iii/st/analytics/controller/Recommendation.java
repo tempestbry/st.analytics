@@ -575,7 +575,7 @@ public class Recommendation {
 				rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' and countyId in ("+getQueryString(json.getCountyId())+") ORDER by rand() limit 0,"+limit+"");
 				for (Map<String, Object> i : rs)
 				{
-					if (i.get("type").toString().equals("2")) //檢查活動時間是否過期
+					if (i.get("type") != null && i.get("type").toString().equals("2")) //檢查活動時間是否過期
 					{
 						if (checkExpire(i.get("id").toString()))
 							continue;
