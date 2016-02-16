@@ -44,12 +44,12 @@ import com.mchange.v2.c3p0.ComboPooledDataSource;
 @EnableAutoConfiguration
 public class Application extends SpringBootServletInitializer {
 
-	static {
+	/*static {
 		// The runtime system executes a class's static
 		// initializer when it loads the class.
 		System.loadLibrary("lindojni");
-	}
-
+	}*/
+	
 	@Autowired
 	Environment environment;
 

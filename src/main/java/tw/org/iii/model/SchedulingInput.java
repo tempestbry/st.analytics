@@ -1,6 +1,9 @@
 package tw.org.iii.model;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
 public class SchedulingInput 
 {
 	private List<String> cityList = new ArrayList<String>();
