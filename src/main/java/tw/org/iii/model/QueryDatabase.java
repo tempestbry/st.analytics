@@ -1,6 +1,7 @@
 package tw.org.iii.model;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +19,9 @@ public class QueryDatabase {
 		this.isDisplay = isDisplay;
 	}
 	
+	//---------------------------------
+	//  get POI or POI list by poiId
+	//---------------------------------
 	public Poi getPoiByPoiId(String poiId, boolean isMustPoi, int looseType) {
 		String sql = "SELECT * FROM Scheduling2 WHERE poiId = '" + poiId + "'";
 		if (isDisplay)
@@ -25,7 +29,7 @@ public class QueryDatabase {
 		
 		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
 		if (isDisplay)
-			System.out.println("[result count] " + queryResult.size());
+			System.out.println("[count] " + queryResult.size());
 		
 		if (queryResult.isEmpty()) {
 			System.err.println("[!!! Error !!!][PoiQuery getPoiByPoiId] poiId not found!");
@@ -47,7 +51,7 @@ public class QueryDatabase {
 		
 		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
 		if (isDisplay)
-			System.out.println("[result count] " + queryResult.size());
+			System.out.println("[count] " + queryResult.size());
 		
 		if (queryResult.size() != poiIdList.size()) {
 			System.err.println("[!!! Error !!!][PoiQuery getPoiListByPoiIdList] Some poiId not found!");
@@ -64,7 +68,10 @@ public class QueryDatabase {
 		}
 	}
 	
-	public List<Poi> getRandomPoiListByCountyAndOpenDay(int numSelection, List<Integer> countyIndex, boolean[] isMustOpen, int looseType) {
+	//--------------------------------------------------------
+	//  get random POI or POI list by (1)county (2)open day
+	//--------------------------------------------------------
+	private List<Poi> getRandomPoiListByCountyAndOpenDay(int numSelection, List<Integer> countyIndex, boolean[] isMustOpen, int looseType) {
 		if (countyIndex.isEmpty()) {
 			System.err.println("[!!! Error !!!][PoiQuery getRandomPoiListByCountyAndOpenDay] countyIndex is empty!");
 			return null;
@@ -88,7 +95,7 @@ public class QueryDatabase {
 		
 		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
 		if (isDisplay)
-			System.out.println("[result count] " + queryResult.size());
+			System.out.println("[count] " + queryResult.size());
 		
 		if (queryResult.size() != numSelection) {
 			System.err.println("[!!! Error !!!][PoiQuery getRandomPoiListByCountyAndOpenDay] Not select correct number of POIs!");
@@ -104,7 +111,118 @@ public class QueryDatabase {
 			return poiList;
 		}
 	}
+	public List<Poi> getRandomPoiListByCountyAndOpenDay(int numSelection, List<Integer> countyIndex, int mustOpenDay, int looseType) {
+		boolean[] isMustOpen = new boolean[7];
+		isMustOpen[mustOpenDay] = true;
+		return getRandomPoiListByCountyAndOpenDay(numSelection, countyIndex, isMustOpen, looseType);
+	}
+	public List<Poi> getRandomPoiListByCountyAndOpenDay(int numSelection, List<Integer> countyIndex, String mustOpenDay, int looseType) {
+		if (mustOpenDay.equals("allOpen")) {
+			boolean[] isMustOpen = new boolean[7];
+			Arrays.fill(isMustOpen, true);
+			return getRandomPoiListByCountyAndOpenDay(numSelection, countyIndex, isMustOpen, looseType);
+		}
+		else
+			return null;
+	}
 	
+	public Poi getRandomPoiByCountyAndOpenDay(String countyId, int mustOpenDay, int looseType) {
+		List<Integer> countyIndex = new ArrayList<Integer>();
+		countyIndex.add( Integer.parseInt( countyId.replaceAll("[^0-9]", "")) );
+		
+		boolean[] isMustOpen = new boolean[7];
+		isMustOpen[mustOpenDay] = true;
+		
+		List<Poi> poiList = getRandomPoiListByCountyAndOpenDay(1, countyIndex, isMustOpen, looseType);
+		if (poiList == null || poiList.isEmpty())
+			return null;
+		else
+			return poiList.get(0);
+	}
+	
+	//------------------------------------------------------------------------------------
+	//  get (random) POI list by (1)center poiId (2)county (not necessarily) (3)open day
+	//------------------------------------------------------------------------------------
+	private List<Poi> getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(int numSelectionLB, int numSelectionUB,
+			String centerPoiId, double distanceLB, double distanceUB, double distanceUBIncrement,
+			List<Integer> countyIndex, boolean[] isMustOpen, String orderBy, int looseType) {
+		//usage:	enter distanceLB <= 0 if not used
+		//		enter distanceUB <= 0 if not used  (at least one of distanceLB/distanceUB has to be > 0)
+		//		enter distanceUBIncrement = 0 if not used
+		//		countyIndex is allowed to be null or empty
+		if (distanceLB <= 0 && distanceUB <= 0) {
+			System.err.println("[!!! Error !!!][PoiQuery getRandomPoiListByCenterPoiIdAndCountyAndOpenDay] distanceLB and distanceUB are both <= 0 !");
+			return null;
+		}
+		double distanceUBForTermination = 100;
+		
+		List<Map<String, Object>> queryResult;
+		while (true) {
+			String sql = "SELECT c.*, distanceCircle AS distanceMeasure FROM "
+					+ "(SELECT poiId_to, distanceCircle FROM Distance WHERE ("
+					+ getPartialSqlWithCenterPoiId(centerPoiId, distanceLB, distanceUB)
+					+ ")) b LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId";
+			// county
+			if (countyIndex != null && ! countyIndex.isEmpty()) {
+				sql += " WHERE countyId IN ('TW" + countyIndex.get(0) + "'";
+				for (int i = 1; i < countyIndex.size(); ++i)
+					sql += ", 'TW" + countyIndex.get(i) + "'";
+				sql += ")";
+			} else
+				sql += " WHERE 1";
+			
+			// isMustOpen
+			for (int i = 0; i < 7; ++i) {
+				if (isMustOpen[i])
+					sql += " AND (OH_" + daysOfWeekName[i] + " IS NULL OR OH_" + daysOfWeekName[i] + " != 'close')";
+			}
+			
+			sql += " ORDER BY " + orderBy + " LIMIT " + numSelectionUB;
+			
+			if (isDisplay)
+				System.out.println("[SQL] " + sql);
+			
+			queryResult = analyticsjdbc.queryForList(sql);
+			if (isDisplay)
+				System.out.println("[count] " + queryResult.size());
+			
+			if (queryResult.size() >= numSelectionLB || distanceUBIncrement == 0 || distanceUB > distanceUBForTermination)
+				break;
+			else
+				distanceUB += distanceUBIncrement;
+		}
+		
+		List<Poi> poiList = new ArrayList<Poi>();
+		for (int i = 0; i < queryResult.size(); ++i) {
+			Poi poi = new Poi();
+			poi.setFromQueryResult(queryResult.get(i), looseType);
+			poi.setMustPoi(false);
+			poiList.add(poi);
+		}
+		return poiList;
+	}
+	private String getPartialSqlWithCenterPoiId(String poiId, double distanceLB, double distanceUB) {
+		String result = "(poiId_from = '" + poiId + "'";		
+		if (distanceLB > 0)
+			result = result + " AND distanceCircle >= " + distanceLB;
+		if (distanceUB > 0)
+			result = result + " AND distanceCircle <= " + distanceUB;
+		result = result + ")";
+		return result;
+	}
+	public List<Poi> getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(int numSelectionLB, int numSelectionUB,
+			String centerPoiId, double distanceLB, double distanceUB, double distanceUBIncrement,
+			List<Integer> countyIndex, int mustOpenDay, String orderBy, int looseType) {
+		boolean[] isMustOpen = new boolean[7];
+		isMustOpen[mustOpenDay] = true;
+		return getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(numSelectionLB, numSelectionUB,
+				centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
+				countyIndex, isMustOpen, orderBy, looseType);
+	}
+	
+	//----------------------------------
+	//  get nearby poiId by coordinate
+	//----------------------------------
 	public String getNearbyPoiIdByCoordinate(double latitude, double longitude) {
 		
 		final double latitudeLB = 20.9; //21.8976
@@ -119,16 +237,16 @@ public class QueryDatabase {
 		
 		double tolerance = 0.01;
 		while (true) {
-			String sql = "SELECT * FROM Scheduling2 WHERE checkinTotal > 0"
-						+ " AND latitude >= " + (latitude - tolerance) + " AND latitude <= " + (latitude + tolerance)
-						+ " AND longitude >= " + (longitude - tolerance) + " AND longitude <= " + (longitude + tolerance)
-						+ " ORDER BY RAND() LIMIT 1;";
+			String sql = "SELECT * FROM Scheduling2 WHERE"
+					+ " latitude >= " + (latitude - tolerance) + " AND latitude <= " + (latitude + tolerance)
+					+ " AND longitude >= " + (longitude - tolerance) + " AND longitude <= " + (longitude + tolerance)
+					+ " ORDER BY RAND() LIMIT 1;";
 			if (isDisplay)
 				System.out.println("[SQL] " + sql);
 			
 			List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
 			if (isDisplay)
-				System.out.println("[result count] " + queryResult.size());
+				System.out.println("[count] " + queryResult.size());
 			
 			if (! queryResult.isEmpty())
 				return queryResult.get(0).get("poiId").toString();

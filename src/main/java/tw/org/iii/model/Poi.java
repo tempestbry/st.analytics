@@ -7,15 +7,17 @@ import java.util.Map;
 
 public class Poi {
 	
-	// from database
+	// from database -- always exists
 	private String poiId;
 	private String poiName;
 	private String location;
 	private String countyId;
 	private int checkins;
-	private int[] theme = new int[8];
+	private boolean[] theme = new boolean[8];
 	private int stayTime;
 	private String[] openHoursOfSevenDays = new String[7];
+	// from database -- sometimes exists
+	private double distanceMeasure; //distance or time
 	
 	// from user input
 	private boolean isMustPoi;
@@ -37,7 +39,7 @@ public class Poi {
 		
 		for (int i = 10; i <= 17; ++i) {
 			Object tempObj2 = queryResultPoi.get("TH" + i);
-			theme[i-10] = ( tempObj2 != null && tempObj2.toString().equals("1") ) ? 1 : 0;
+			theme[i-10] = ( tempObj2 != null && tempObj2.toString().equals("1") ) ? true : false;
 		}
 		
 		Object tempObj3 = queryResultPoi.get("stayTime");
@@ -50,6 +52,10 @@ public class Poi {
 		for (int i = 0; i < 7; ++i) {
 			Object tempObj4 = queryResultPoi.get("OH_" + QueryDatabase.daysOfWeekName[i]);
 			openHoursOfSevenDays[i] = (tempObj4 != null) ? tempObj4.toString() : null;
+		}
+		
+		if (queryResultPoi.get("distanceMeasure") != null) {
+			distanceMeasure = Double.parseDouble( queryResultPoi.get("distanceMeasure").toString() );
 		}
 	}
 	
@@ -106,11 +112,11 @@ public class Poi {
 		this.checkins = checkins;
 	}
 
-	public int[] getTheme() {
+	public boolean[] getTheme() {
 		return theme;
 	}
 
-	public void setTheme(int[] theme) {
+	public void setTheme(boolean[] theme) {
 		this.theme = theme;
 	}
 
@@ -128,6 +134,14 @@ public class Poi {
 
 	public void setOpenHoursOfSevenDays(String[] openHoursOfSevenDays) {
 		this.openHoursOfSevenDays = openHoursOfSevenDays;
+	}
+
+	public double getDistanceMeasure() {
+		return distanceMeasure;
+	}
+
+	public void setDistanceMeasure(double distanceMeasure) {
+		this.distanceMeasure = distanceMeasure;
 	}
 
 	public boolean isMustPoi() {
@@ -179,6 +193,51 @@ public class Poi {
 			poiCenter[1] = sumLongitude / poiList.size();
 		}
 		return poiCenter;
+	}
+	
+	public static double[] calculateScores(List<Poi> poiList, boolean[] userInputTheme) {
+		double[] scores = new double[poiList.size()];
+		
+		// calculate max/min distance measure
+		double minDistanceMeasure = Double.MAX_VALUE;
+		double maxDistanceMeasure = Double.MIN_VALUE;
+		for (Poi poi : poiList) {
+			double distanceMeasure = poi.getDistanceMeasure();
+			if (distanceMeasure < minDistanceMeasure)
+				minDistanceMeasure = distanceMeasure;
+			if (distanceMeasure > maxDistanceMeasure)
+				maxDistanceMeasure = distanceMeasure;
+		}
+		double rangeDistanceMeasure = maxDistanceMeasure - minDistanceMeasure;
+		
+		// count user input theme
+		double countUserInputTheme = 0;
+		for (int i = 0; i < 8; ++i)
+			if (userInputTheme[i])
+				++countUserInputTheme;
+		
+		// calculate scores
+		for (int i = 0; i < poiList.size(); ++i) {
+			double scoresDistanceMeasure = 1;
+			if (rangeDistanceMeasure > 0)
+				scoresDistanceMeasure = 1.0 - (poiList.get(i).getDistanceMeasure() - minDistanceMeasure) / rangeDistanceMeasure;
+			
+			double scoresCheckins = 0;
+			if (poiList.get(i).getCheckins() > 0)
+				scoresCheckins = (1.0 - 1 / Math.pow(poiList.get(i).getCheckins(), 0.02)) * 4;
+			
+			double scoresTheme = 1;
+			if (countUserInputTheme > 0) {
+				double countThemeMatch = 0;
+				for (int j = 0; j < 8; ++j)
+					if (userInputTheme[j] && poiList.get(i).getTheme()[j])
+						++countThemeMatch;
+				scoresTheme = countThemeMatch / countUserInputTheme;
+			}
+			
+			scores[i] = scoresDistanceMeasure / 8 + scoresCheckins * 3 / 4 + scoresTheme / 8;
+		}
+		return scores;
 	}
 	
 	public static int findShortestTimeFromPoiToPoiList(Poi poi, List<Poi> poiList, int[][] travelTime) {

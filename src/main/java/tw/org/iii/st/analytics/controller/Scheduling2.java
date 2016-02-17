@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Random;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -71,9 +72,9 @@ public class Scheduling2 {
 		itineraryEndCalendar.setTime(input.getEndTime());
 		
 		List<String> themeList = input.getPreferenceList(); //should have at least one element
-		int[] userInputTheme = new int[8];
+		boolean[] userInputTheme = new boolean[8];
 		for (String themeStr : themeList) {
-			userInputTheme[Integer.parseInt(themeStr.substring(3, 4))] = 1;
+			userInputTheme[Integer.parseInt(themeStr.substring(3, 4))] = true;
 		}
 		
 		int looseType = input.getLooseType();
@@ -179,7 +180,7 @@ public class Scheduling2 {
 						
 						System.out.println("[1A-nearStartPoint] " + sql);
 						queryResult = analyticsjdbc.queryForList(sql);
-						System.out.println("[result count] " + queryResult.size());
+						System.out.println("[count] " + queryResult.size());
 						
 						if (queryResult.size() > 0)
 							break;
@@ -213,7 +214,7 @@ public class Scheduling2 {
 						
 						System.out.println("[1A-laterPoints] " + sql);
 						queryResult = analyticsjdbc.queryForList(sql);
-						System.out.println("[result count] " + queryResult.size());
+						System.out.println("[count] " + queryResult.size());
 						
 						if (queryResult.size() > 0)
 							break;
@@ -255,27 +256,7 @@ public class Scheduling2 {
 					
 				} else {
 					//select seed POI from database for this day
-					List<Map<String, Object>> queryResult;
-					String dayOfWeekStr = QueryDatabase.daysOfWeekName[dailyInfo.getDayOfWeek()];
-					
-					while (true) {
-						String sql = "SELECT * FROM Scheduling2 WHERE countyId = '" + dailyInfo.getMustCounty()
-									+ "' AND (OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close') ORDER BY RAND() LIMIT 1;";
-						System.out.println("[1B-inCounty] " + sql);
-						queryResult = analyticsjdbc.queryForList(sql);
-						System.out.println("[result count] " + queryResult.size());
-						
-						if (queryResult.size() > 0)
-							break;
-						else
-							System.err.println("Error in searching POI in a county!");
-					}
-					
-					//insert seed POI into POI list
-					Poi seedPoi = new Poi();
-					seedPoi.setFromQueryResult(queryResult.get(0), looseType);
-					seedPoi.setMustPoi(false);
-					
+					Poi seedPoi = queryDatabase.getRandomPoiByCountyAndOpenDay(dailyInfo.getMustCounty(), dailyInfo.getDayOfWeek(), looseType);
 					dailyInfo.getPoiList().add(seedPoi);
 					
 					selectedPoiId.add(seedPoi.getPoiId());
@@ -289,39 +270,23 @@ public class Scheduling2 {
 						for (int j = 0; j < dayIndicesWithoutMustCounty.size(); ++j) {
 							
 							DailyInfo dailyInfo2 = fullInfo.get( dayIndicesWithoutMustCounty.get(j) );
-							String dayOfWeekStr2 = QueryDatabase.daysOfWeekName[dailyInfo2.getDayOfWeek()];
-							
 							double latitude = coordinate1[0] + (coordinate2[0] - coordinate1[0]) * (j + 1) / (dayIndicesWithoutMustCounty.size() + 1);
 							double longitude = coordinate1[1] + (coordinate2[1] - coordinate1[1]) * (j + 1) / (dayIndicesWithoutMustCounty.size() + 1);
 							String locationInterpolatedPoiId = queryDatabase.getNearbyPoiIdByCoordinate(latitude, longitude);
 							
 							//selecting candidate POIs from database
+							double distanceLB = 0;
 							double distanceUB = 10;
-							while (true) {
-								String sql = "SELECT c.* FROM "
-									+ "(SELECT poiId_to FROM Distance WHERE ("
-									+ getPartialSqlWithDistance(locationInterpolatedPoiId, null, String.valueOf(distanceUB))
-									+ ")) b"
-									+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
-									+ " WHERE OH_" + dayOfWeekStr2 + " IS NULL OR OH_" + dayOfWeekStr2 + " != 'close' ORDER BY RAND() LIMIT 1;";
-								
-								System.out.println("[1B-interpolation] " + sql);
-								queryResult = analyticsjdbc.queryForList(sql);
-								System.out.println("[result count] " + queryResult.size());
-								
-								if (queryResult.size() > 0)
-									break;
-								else
-									distanceUB += 5;
-							}
-							//insert POI into POI list
-							Poi poi = new Poi();
-							poi.setFromQueryResult(queryResult.get(0), looseType);
-							poi.setMustPoi(false);
+							double distanceUBIncrement = 5;
+							List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
+									1, 1, locationInterpolatedPoiId, distanceLB, distanceUB, distanceUBIncrement,
+									null, dailyInfo2.getDayOfWeek(), "RAND()", looseType);
+							if (foundPoiList.size() == 1)
+								dailyInfo2.getPoiList().add( foundPoiList.get(0) );
+							else
+								;
 							
-							dailyInfo2.getPoiList().add(poi);
-							
-							selectedPoiId.add(poi.getPoiId());							
+							selectedPoiId.add( foundPoiList.get(0).getPoiId() );							
 						}
 						
 						//clear
@@ -378,7 +343,7 @@ public class Scheduling2 {
 						
 						System.out.println("[1B-last-segment] " + sql);
 						queryResult = analyticsjdbc.queryForList(sql);
-						System.out.println("[result count] " + queryResult.size());
+						System.out.println("[count] " + queryResult.size());
 						
 						if (queryResult.size() > 0)
 							break;
@@ -553,14 +518,11 @@ public class Scheduling2 {
 					
 					
 					// select additional POIs from database
-					boolean[] isMustOpen = new boolean[7];
-					Arrays.fill(isMustOpen, true);
-					
-					List<Poi> poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
-							numDay - numClusterUsed, candidateCountyIndex, isMustOpen, looseType);
+					List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
+							numDay - numClusterUsed, candidateCountyIndex, "allOpen", looseType);
 					
 					for (int i = 0; i < numDay - numClusterUsed; ++i) {
-						clusterInfo[i + numClusterUsed].getPoiList().add( poiList.get(i) );
+						clusterInfo[i + numClusterUsed].getPoiList().add( foundPoiList.get(i) );
 					}
 					
 					// display cluster information
@@ -635,37 +597,30 @@ public class Scheduling2 {
 				}
 			}
 			
-			// check if all POI in this cluster are ALL CLOSE
+			// check if all POI in this [cluster / day] are ALL CLOSE
 			for (int i = 0; i < numDay; ++i) {
 				DailyInfo dailyInfo = fullInfo.get(i);
-				
 				if (dailyInfo.getPoiList().isEmpty()) {
-					String dayOfWeekStr = QueryDatabase.daysOfWeekName[dailyInfo.getDayOfWeek()];
-					String centeredPoiId = queryDatabase.getNearbyPoiIdByCoordinate( clusterInfo[i].getPoiCenter() );
-
-					List<Map<String, Object>> queryResult;
+					String centerPoiId = queryDatabase.getNearbyPoiIdByCoordinate( clusterInfo[i].getPoiCenter() );
+					
+					double distanceLB = 0;
 					double distanceUB = 0.3;
-					while (true) {
-						String sql1 = "SELECT c.* FROM "
-							+ "(SELECT poiId_to FROM Distance WHERE ("
-							+ getPartialSqlWithDistance(centeredPoiId, null, String.valueOf(distanceUB))
-							+ ")) b"
-							+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
-							+ " WHERE OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close' ORDER BY RAND() LIMIT 1;";
-						
-						System.out.println("[1C-allPoiCloseInCluster] " + sql1);
-						queryResult = analyticsjdbc.queryForList(sql1);
-						System.out.println(queryResult.size());
-						
-						if (queryResult.size() > 0)
-							break;
-						else
-							distanceUB += 0.3;
+					double distanceUBIncrement = 0.3;
+					
+					List<Integer> countyIndex = new ArrayList<Integer>();
+					if (! dailyInfo.getMustCounty().equals("all")) {
+						countyIndex.add( Integer.parseInt( dailyInfo.getMustCounty().replaceAll("[^0-9]", "")) );
+						distanceUB = 5;
+						distanceUBIncrement = 5;
 					}
-					Poi poi = new Poi();
-					poi.setFromQueryResult(queryResult.get(0), looseType);
-					poi.setMustPoi(false);
-					dailyInfo.getPoiList().add(poi);
+					
+					List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
+							1, 1, centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
+							countyIndex, dailyInfo.getDayOfWeek(), "RAND()", looseType);
+					if (foundPoiList.size() == 1)
+						dailyInfo.getPoiList().add( foundPoiList.get(0) );
+					else
+						;
 				}
 			}
 			
@@ -673,9 +628,6 @@ public class Scheduling2 {
 			//----------------------------------------------------------------------------------------
 			// stage 1, case D： 有必去縣市、有必去景點 (isAnyMustCounty && ! mustPoiIdList.isEmpty())
 			//----------------------------------------------------------------------------------------
-			
-
-			
 			
 /*			
 			// initialize allMustCountyInfo[0~22]
@@ -811,8 +763,6 @@ public class Scheduling2 {
 			for (Poi poi : poiList)
 				System.out.println(poi);
 			
-			String dayOfWeekStr = QueryDatabase.daysOfWeekName[dailyInfo.getDayOfWeek()];
-			
 			int numCandidatePoi = Math.max(numPoiForSelectionUpperBound - dailyInfo.getPoiList().size(), 0);
 			
 			if (numCandidatePoi > 0) {
@@ -833,212 +783,28 @@ public class Scheduling2 {
 						countyIndexForSearch.add(j);
 				
 				
-				String centeredPoiId = queryDatabase.getNearbyPoiIdByCoordinate( Poi.calculatePoiCenter(poiList) );
+				String centerPoiId = queryDatabase.getNearbyPoiIdByCoordinate( Poi.calculatePoiCenter(poiList) );
 				
-				List<Map<String, Object>> queryResult;
-				
-				//selecting candidate POIs from database (OLD)
-				double distanceLB = 0.1;
+				//select candidate POIs from database
+				int numSelectionLB = 30;
+				int numSelectionUB = 50;
+				double distanceLB = 0;
 				double distanceUB = 15;
-				while (true) {
-					String sql = "SELECT c.* FROM "
-							+ "(SELECT poiId_to FROM Distance WHERE ("
-							+ getPartialSqlWithDistance(centeredPoiId, String.valueOf(distanceLB), String.valueOf(distanceUB))
-							+ ")) b"
-							+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
-							+ " WHERE countyId IN ('TW" + countyIndexForSearch.get(0) + "'";
-					for (int j = 1; j < countyIndexForSearch.size(); ++j)
-						sql += ", 'TW" + countyIndexForSearch.get(j) + "'";
-					sql += ") AND OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close' ORDER BY RAND() LIMIT " + numCandidatePoi + ";";
-					
-					System.out.println("[2-candidates] " + sql);
-					queryResult = analyticsjdbc.queryForList(sql);
-					System.out.println(queryResult.size());
-					
-					if (queryResult.size() >= numCandidatePoi)
-						break;
-					else
-						distanceUB += 5;
+				double distanceUBIncrement = 5;
+				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
+						numSelectionLB, numSelectionUB, centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
+						countyIndexForSearch, dailyInfo.getDayOfWeek(), "checkinTotal DESC", looseType);
+				
+				// select #=numCandidatePoi from foundPoiList by probability/scores
+				double[] scores = Poi.calculateScores(foundPoiList, userInputTheme);
+				//Display.print_1D_Array(scores, "scores");
+				
+				List<Integer> selectedIndex = selectByProbabilityWithoutReplacement(scores, numCandidatePoi);
+				//Display.print_1D_List(selectedIndex);
+				for (Integer j : selectedIndex) {
+					poiList.add( foundPoiList.get(j) );
 				}
-				
-				//selecting candidate POIs from database
-				/*double initialdistanceLB = 2;
-				
-				while (true) { //While make sure the number of candidates > 50
-					
-					String sql = "SELECT * FROM "
-							+ "(SELECT * FROM Distance WHERE poiId_from ='"
-							+ centeredPoiId
-							+ "' AND distance <= "
-							+ String.valueOf(initialdistanceLB)
-							+ ") a "
-							+ "left join Scheduling2 b "
-							+ "on a.poiId_to = b.poiId "
-							+ "WHERE checkinTotal > 0 "
-							+ "AND (OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close')"
-							+ "ORDER BY checkinTotal desc "
-							+ "LIMIT 100 ";
-					
-					System.out.println("[2-candidates] " + sql);
-					queryResult = analyticsjdbc.queryForList(sql);
-					System.out.println(queryResult.size());
-					
-					int numcount = queryResult.size();
-					if (numcount < 50) {//Make sure we got at least 50 candidates
-						initialdistanceLB += 1; //expand the search bound if numcount < 50
-					} else {
-						
-						int i1 = 0;
-						double maxdistance = 0;
-						double mindistance = 5000;
-						double sumscore = 0;
-						String[][] poiarrary = new String[numcount][8];//store poi info & score//[][0]poiId, [][1]name, [][2]distance, [][3]checkinTotal, [][4]score probability, [][5]accumulated score
-						double[][] poithemearrary = new double[numcount][8];//store poi theme info
-						String[] selectedpoiarray = new String[numCandidatePoi];//store selected poi ==>output
-						double[] selectedpoiscorearray = new double[numCandidatePoi];//store selected poi score ==>output
-						double[] poiprobabilityranklist = new double[numcount];//store poi rank, just for show
-						
-						//get poi informatiom from DB
-						for (Map<String, Object> result : queryResult) {
-
-							poiarrary[i1][0] = result.get("poiId").toString();
-							poiarrary[i1][1] = result.get("name").toString();
-							poiarrary[i1][2] = result.get("distance").toString();
-							poiarrary[i1][3] = result.get("checkinTotal").toString();
-
-							if (result.get("TH10") != null && result.get("TH10").toString().equals("1"))
-								poithemearrary[i1][0] = 1;
-							if (result.get("TH11") != null && result.get("TH11").toString().equals("1"))
-								poithemearrary[i1][1] = 1;
-							if (result.get("TH12") != null && result.get("TH12").toString().equals("1"))
-								poithemearrary[i1][2] = 1;
-							if (result.get("TH13") != null && result.get("TH13").toString().equals("1"))
-								poithemearrary[i1][3] = 1;
-							if (result.get("TH14") != null && result.get("TH14").toString().equals("1"))
-								poithemearrary[i1][4] = 1;
-							if (result.get("TH15") != null && result.get("TH15").toString().equals("1"))
-								poithemearrary[i1][5] = 1;
-							if (result.get("TH16") != null && result.get("TH16").toString().equals("1"))
-								poithemearrary[i1][6] = 1;
-							if (result.get("TH17") != null && result.get("TH17").toString().equals("1"))
-								poithemearrary[i1][7] = 1;
-							i1++;
-						}
-						
-						// find maxdistance & mindistance from poi candidates, for calculate distancescore later
-						for (String[] poiarrary1 : poiarrary) {
-							if (maxdistance < Double.parseDouble(poiarrary1[2])) {
-								maxdistance = Double.parseDouble(poiarrary1[2]);
-							}
-							if (mindistance > Double.parseDouble(poiarrary1[2])) {
-								mindistance = Double.parseDouble(poiarrary1[2]);
-							}
-						}
-						double distancescore;
-						double themescore;
-						double themesum; //Calculate how many themes did user select
-						
-						for (int x = 0; x < poiarrary.length; x++) {
-							//distance score caculating
-							distancescore = 1 - (Double.parseDouble(poiarrary[x][2]) - mindistance) / (maxdistance - mindistance);
-							
-							//checkins score caculating
-							double checkinsscore = 1 * (1 - 1 / Math.pow(Double.parseDouble(poiarrary[x][3]), 0.02)) / 0.243;
-							
-							//theme score caculating
-							themesum = 0;
-							themescore = 0;
-							for (int j = 0; j < 8; j++) {
-								themescore += themearray[j] * poithemearrary[x][j];
-								themesum += themearray[j];
-							}
-							themescore = themescore / themesum;
-							
-							double poiscore = distancescore / 8 + checkinsscore / 4 * 3 + themescore / 8;
-							sumscore += poiscore;
-							poiarrary[x][4] = String.valueOf(poiscore);
-						}
-						
-						//Turn the score to accumulated probability from 0 to 1
-						poiarrary[0][4] = String.valueOf(Double.parseDouble(poiarrary[0][4]) / sumscore);
-						poiarrary[0][5] = poiarrary[0][4];
-						poiprobabilityranklist[0] = Double.parseDouble(poiarrary[0][4]);
-						for (int x = 1; x < poiarrary.length; x++) {
-							poiarrary[x][4] = String.valueOf(Double.parseDouble(poiarrary[x][4]) / sumscore);                        
-							poiarrary[x][5] = String.valueOf(Double.parseDouble(poiarrary[x][4]) + Double.parseDouble(poiarrary[x - 1][5]));
-							System.out.println(poiarrary[x][4]+"  probability:"+poiarrary[x][4]+"  accumulated probability"+poiarrary[x][5]);
-							poiprobabilityranklist[x] = Double.parseDouble(poiarrary[x][4]);
-						}
-						Arrays.sort(poiprobabilityranklist);//sort the poiprobability to get the rank, only for show
-
-						
-
-						//Get the chosen PoI by random number
-						int alreadychoose = 0;//How many candidates already been chosed
-						while (alreadychoose < numCandidatePoi) {
-
-							double randomseed = Math.random();
-							for (int x = 1; x < poiarrary.length; x++) {
-
-							    if (randomseed >= 0 && randomseed <= Double.parseDouble(poiarrary[0][5])) {
-							        if (alreadychoose > 0) {
-							            if (Arrays.asList(selectedpoiarray).contains(poiarrary[0][1])) {//check already been chosed
-							                break;
-							            }
-							        }
-							        selectedpoiarray[alreadychoose] = poiarrary[0][1];
-							        selectedpoiscorearray[alreadychoose] = Double.parseDouble(poiarrary[0][4]);
-							        alreadychoose++;
-							        break;
-							    }
-							    if (randomseed > Double.parseDouble(poiarrary[x - 1][5]) && randomseed <= Double.parseDouble(poiarrary[x][5])) {
-							        if (alreadychoose > 0) {
-							            if (Arrays.asList(selectedpoiarray).contains(poiarrary[x][1])) {
-							                break;
-							            }
-							        }
-							        selectedpoiarray[alreadychoose] = poiarrary[x][1];
-							        selectedpoiscorearray[alreadychoose] = Double.parseDouble(poiarrary[x][4]);
-							        alreadychoose++;
-							        break;
-							    }
-							    if (x == (poiarrary.length - 1)) {
-							        if (alreadychoose > 0) {
-							            if (Arrays.asList(selectedpoiarray).contains(poiarrary[poiarrary.length - 1][1])) {
-							                break;
-							            }
-							        }
-							        selectedpoiarray[alreadychoose] = poiarrary[poiarrary.length - 1][1];
-							        selectedpoiscorearray[alreadychoose] = Double.parseDouble(poiarrary[poiarrary.length - 1][4]);
-							        alreadychoose++;
-							        break;
-							    }
-							}
-						}
-
-						//find the rank index, just for show
-						int[] ranklist = new int[numCandidatePoi];
-						for (int x = 0; x < selectedpoiscorearray.length; x++) {
-							ranklist[x] = poiprobabilityranklist.length - Arrays.binarySearch(poiprobabilityranklist, selectedpoiscorearray[x]);
-						}
-
-						System.out.println(Arrays.toString(selectedpoiarray));
-						System.out.println(Arrays.toString(selectedpoiscorearray));
-						
-						System.out.println(Arrays.toString(ranklist) + " Total candidates: " + poiprobabilityranklist.length);
-						break;
-					}
-				}*/
-				
-				
-				
-				//adding selected POIs into POI list
-				for (int j = 0; j < numCandidatePoi; ++j) {
-					Poi candidatePoi = new Poi();
-					candidatePoi.setFromQueryResult(queryResult.get(j), looseType);
-					candidatePoi.setMustPoi(false);
-					poiList.add(candidatePoi);
-				}
+				//NOTE: for non-must POI already in poiList ..
 			}
 			
 			System.out.println("--- Day " + (i+1) + " --- after adding candidate POIs:");
@@ -1478,5 +1244,51 @@ public class Scheduling2 {
 		}
 	}
 	
+	private List<Integer> selectByProbabilityWithoutReplacement(double[] scores, int numSelection) {
+		List<Integer> selectedIndex = new ArrayList<Integer>();
+		
+		if (numSelection >= scores.length) {
+			for (int i = 0; i < scores.length; ++i)
+				selectedIndex.add(i);
+			return selectedIndex;
+		}
+		
+		// calculate cumulative scores
+		double[] cumulativeScores = new double[scores.length];
+		cumulativeScores[0] = scores[0];
+		for (int i = 1; i < scores.length; ++i)
+			cumulativeScores[i] = cumulativeScores[i - 1] + scores[i];
+		//Display.print_1D_Array(cumulativeScores, "cumulativeScores");
+		
+		// calculate cumulative probability
+		double[] cumulativeProbability = new double[scores.length];
+		for (int i = 0; i < scores.length; ++i)
+			cumulativeProbability[i] = cumulativeScores[i] / cumulativeScores[scores.length - 1];
+		//Display.print_1D_Array(cumulativeProbability, "cumulativeProbability");
+		
+		// select by probability
+		boolean[] isSelected = new boolean[scores.length];
+		Random random = new Random();
+		int count = 0;
+		
+		while (count < numSelection) {
+			double randomNumber = random.nextDouble();
+			int i = 0;
+			while (randomNumber >= cumulativeProbability[i])
+				++i;
+			if (! isSelected[i]) {
+				isSelected[i] = true;
+				++count;
+			}
+			//System.out.println(randomNumber);
+			//Display.print_1D_Array(isSelected, "isSelected");
+			//System.out.println(numSelection + " / " + count);
+		}
+		
+		for (int i = 0; i < isSelected.length; ++i)
+			if (isSelected[i])
+				selectedIndex.add(i);
+		return selectedIndex;
+	}
 }
 
