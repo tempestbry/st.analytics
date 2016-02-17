@@ -41,7 +41,7 @@ public class Poi {
 		}
 		
 		Object tempObj3 = queryResultPoi.get("stayTime");
-		stayTime = 60 * ( (tempObj3 != null && ! tempObj3.toString().isEmpty()) ? Integer.parseInt(tempObj3.toString()) : 1);//minutes //no data-->60min
+		stayTime = (int)( 60 * ( (tempObj3 != null && ! tempObj3.toString().isEmpty()) ? Double.parseDouble(tempObj3.toString()) : 1) );//minutes //no data-->60min
 		if (looseType == 1)
 			stayTime = (int)(1.2 * stayTime);
 		else if (looseType == -1)

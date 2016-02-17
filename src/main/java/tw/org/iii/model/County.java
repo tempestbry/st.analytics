@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,17 +18,8 @@ public class County {
 	private static Map<String, List<Integer>> intermediateCounty = new HashMap<String, List<Integer>>();
 	
 	static {
-		FileInputStream fileInputStream = null;
-		try {
-		if (System.getProperty("os.name").equals("Windows 7"))
-			fileInputStream = new FileInputStream("C:/data/ari/tourism/data/intermediate_county.txt");
-		else
-			fileInputStream = new FileInputStream("/root/intermediate_county.txt");
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		}
-
-		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(fileInputStream));
+		InputStream inputStream = County.class.getClassLoader().getResourceAsStream("intermediate_county.txt");
+		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
 		String line;
 		try {
 			while ((line = bufferedReader.readLine()) != null)   {
@@ -57,17 +49,8 @@ public class County {
 	private static Map<String, List<Integer>> nearbyCounty = new HashMap<String, List<Integer>>();
 	
 	static {
-		FileInputStream fileInputStream = null;
-		try {
-		if (System.getProperty("os.name").equals("Windows 7"))
-			fileInputStream = new FileInputStream("C:/data/ari/tourism/data/nearby_county.txt");
-		else
-			fileInputStream = new FileInputStream("/root/nearby_county.txt");
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		}
-
-		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(fileInputStream));
+		InputStream inputStream = County.class.getClassLoader().getResourceAsStream("nearby_county.txt");
+		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
 		String line;
 		try {
 			while ((line = bufferedReader.readLine()) != null)   {

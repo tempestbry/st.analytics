@@ -167,14 +167,14 @@ public class Scheduling2 {
 				if (selectedPoiId.size() == 0) {
 					while (true) {
 						String sql = "SELECT c.* FROM "
-							+ "(SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE ("
+							+ "(SELECT poiId_to FROM Distance WHERE ("
 							+ getPartialSqlWithDistance(itineraryStartPoi.getPoiId(), null, "10")
 							+ ")) b"
-							+ " LEFT JOIN Scheduling2_bkup c ON b.poiId_to = c.poiId"
+							+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
 							+ " WHERE OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close' ORDER BY RAND() LIMIT 1;";
 						
 						
-						//String sql = "SELECT c.* FROM Scheduling2_bkup c";	
+						//String sql = "SELECT c.* FROM Scheduling2 c";	
 						//sql += " WHERE OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close' ORDER BY RAND() LIMIT 1;";
 						
 						System.out.println("[1A-nearStartPoint] " + sql);
@@ -194,12 +194,12 @@ public class Scheduling2 {
 					while (true) {
 						String sql = "SELECT c.* FROM ";
 						if (selectedPoiId.size() == 1) {
-							sql += "(SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE ("
+							sql += "(SELECT poiId_to FROM Distance WHERE ("
 									+ getPartialSqlWithDistance(selectedPoiId.get(0), String.valueOf(distanceLB), String.valueOf(distanceUB))
 									+ ")) b";										
 
 						} else {
-							sql += "(SELECT poiId_to FROM (SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE (";
+							sql += "(SELECT poiId_to FROM (SELECT poiId_to FROM Distance WHERE (";
 							int jj = selectedPoiId.size() - 1;
 							sql += getPartialSqlWithDistance(selectedPoiId.get(jj), String.valueOf(distanceLB), String.valueOf(distanceUB));
 							
@@ -208,7 +208,7 @@ public class Scheduling2 {
 							
 							sql += ")) a GROUP BY poiId_to HAVING COUNT(*) >= " + selectedPoiId.size() + ") b";
 						}
-						sql += " LEFT JOIN Scheduling2_bkup c ON b.poiId_to = c.poiId"
+						sql += " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
 								+ " WHERE OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close' ORDER BY RAND() LIMIT 1;";
 						
 						System.out.println("[1A-laterPoints] " + sql);
@@ -259,7 +259,7 @@ public class Scheduling2 {
 					String dayOfWeekStr = QueryDatabase.daysOfWeekName[dailyInfo.getDayOfWeek()];
 					
 					while (true) {
-						String sql = "SELECT * FROM Scheduling2_bkup WHERE countyId = '" + dailyInfo.getMustCounty()
+						String sql = "SELECT * FROM Scheduling2 WHERE countyId = '" + dailyInfo.getMustCounty()
 									+ "' AND (OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close') ORDER BY RAND() LIMIT 1;";
 						System.out.println("[1B-inCounty] " + sql);
 						queryResult = analyticsjdbc.queryForList(sql);
@@ -299,10 +299,10 @@ public class Scheduling2 {
 							double distanceUB = 10;
 							while (true) {
 								String sql = "SELECT c.* FROM "
-									+ "(SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE ("
+									+ "(SELECT poiId_to FROM Distance WHERE ("
 									+ getPartialSqlWithDistance(locationInterpolatedPoiId, null, String.valueOf(distanceUB))
 									+ ")) b"
-									+ " LEFT JOIN Scheduling2_bkup c ON b.poiId_to = c.poiId"
+									+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
 									+ " WHERE OH_" + dayOfWeekStr2 + " IS NULL OR OH_" + dayOfWeekStr2 + " != 'close' ORDER BY RAND() LIMIT 1;";
 								
 								System.out.println("[1B-interpolation] " + sql);
@@ -347,12 +347,12 @@ public class Scheduling2 {
 					while (true) {
 						String sql = "SELECT c.* FROM ";
 						if (selectedPoiId.size() == 1) {
-							sql += "(SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE ("
+							sql += "(SELECT poiId_to FROM Distance WHERE ("
 								+ getPartialSqlWithDistance(selectedPoiId.get(0), String.valueOf(distanceLB), String.valueOf(distanceUB))
 								+ ")) b";										
 
 						} else if (i == 0) { //use endPointPoi1
-							sql += "(SELECT poiId_to FROM (SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE (";
+							sql += "(SELECT poiId_to FROM (SELECT poiId_to FROM Distance WHERE (";
 							sql += getPartialSqlWithDistance(endPointPoi1.getPoiId(), String.valueOf(distanceLB), String.valueOf(distanceUB));
 							
 							for (int j = selectedPoiId.size() - 1; j >= 0; --j) {
@@ -364,7 +364,7 @@ public class Scheduling2 {
 							sql += ")) a GROUP BY poiId_to HAVING COUNT(*) >= " + selectedPoiId.size() + ") b";
 							
 						} else {
-							sql += "(SELECT poiId_to FROM (SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE (";
+							sql += "(SELECT poiId_to FROM (SELECT poiId_to FROM Distance WHERE (";
 							int jj = selectedPoiId.size() - 1;
 							sql += getPartialSqlWithDistance(selectedPoiId.get(jj), String.valueOf(distanceLB), String.valueOf(distanceUB));
 							
@@ -373,7 +373,7 @@ public class Scheduling2 {
 							
 							sql += ")) a GROUP BY poiId_to HAVING COUNT(*) >= " + selectedPoiId.size() + ") b";
 						}
-						sql += " LEFT JOIN Scheduling2_bkup c ON b.poiId_to = c.poiId"
+						sql += " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
 							+ " WHERE OH_" + dayOfWeekStr2 + " IS NULL OR OH_" + dayOfWeekStr2 + " != 'close' ORDER BY RAND() LIMIT 1;";
 						
 						System.out.println("[1B-last-segment] " + sql);
@@ -647,10 +647,10 @@ public class Scheduling2 {
 					double distanceUB = 0.3;
 					while (true) {
 						String sql1 = "SELECT c.* FROM "
-							+ "(SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE ("
+							+ "(SELECT poiId_to FROM Distance WHERE ("
 							+ getPartialSqlWithDistance(centeredPoiId, null, String.valueOf(distanceUB))
 							+ ")) b"
-							+ " LEFT JOIN Scheduling2_bkup c ON b.poiId_to = c.poiId"
+							+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
 							+ " WHERE OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close' ORDER BY RAND() LIMIT 1;";
 						
 						System.out.println("[1C-allPoiCloseInCluster] " + sql1);
@@ -693,7 +693,7 @@ public class Scheduling2 {
 			
 			// put poi information into allMustCountyInfo
 			for (String mustPoiId : mustPoiIdList) {
-				List<Map<String, Object>> queryResult = analyticsjdbc.queryForList("SELECT * FROM Scheduling2_bkup WHERE poiId = '" + mustPoiId + "';");
+				List<Map<String, Object>> queryResult = analyticsjdbc.queryForList("SELECT * FROM Scheduling2 WHERE poiId = '" + mustPoiId + "';");
 				Poi poi = new Poi();
 				poi.setFromQueryResult(queryResult.get(0));
 				poi.setMustPoi(true);;
@@ -774,7 +774,7 @@ public class Scheduling2 {
 			
 			String sql = "SELECT * FROM (";
 			for (int i = 0; i < mustPoiIdList.size(); ++i) {
-				sql += " SELECT * FROM GreatCircleDistanceForScheduling2 WHERE (poiId_from = '"
+				sql += " SELECT * FROM Distance WHERE (poiId_from = '"
 						+ mustPoiIdList.get(i) + "' AND poiId_to in " + allPoiIdSet + ")";
 				if (i < mustPoiIdList.size() - 1)
 					sql += " UNION";
@@ -842,10 +842,10 @@ public class Scheduling2 {
 				double distanceUB = 15;
 				while (true) {
 					String sql = "SELECT c.* FROM "
-							+ "(SELECT poiId_to FROM GreatCircleDistanceForScheduling2 WHERE ("
+							+ "(SELECT poiId_to FROM Distance WHERE ("
 							+ getPartialSqlWithDistance(centeredPoiId, String.valueOf(distanceLB), String.valueOf(distanceUB))
 							+ ")) b"
-							+ " LEFT JOIN Scheduling2_bkup c ON b.poiId_to = c.poiId"
+							+ " LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId"
 							+ " WHERE countyId IN ('TW" + countyIndexForSearch.get(0) + "'";
 					for (int j = 1; j < countyIndexForSearch.size(); ++j)
 						sql += ", 'TW" + countyIndexForSearch.get(j) + "'";
@@ -867,12 +867,12 @@ public class Scheduling2 {
 				while (true) { //While make sure the number of candidates > 50
 					
 					String sql = "SELECT * FROM "
-							+ "(SELECT * FROM GreatCircleDistanceForScheduling2 WHERE poiId_from ='"
+							+ "(SELECT * FROM Distance WHERE poiId_from ='"
 							+ centeredPoiId
 							+ "' AND distance <= "
 							+ String.valueOf(initialdistanceLB)
 							+ ") a "
-							+ "left join Scheduling2_bkup b "
+							+ "left join Scheduling2 b "
 							+ "on a.poiId_to = b.poiId "
 							+ "WHERE checkinTotal > 0 "
 							+ "AND (OH_" + dayOfWeekStr + " IS NULL OR OH_" + dayOfWeekStr + " != 'close')"
@@ -1077,7 +1077,7 @@ public class Scheduling2 {
 						else
 							poiK = dailyInfo.getEndPoi();
 						
-						//String sql = "SELECT distance from GreatCircleDistanceForScheduling2 WHERE poiId_from = '" + poiList.get(j-1).getPoiId() + "' AND poiId_to = '"
+						//String sql = "SELECT distance from Distance WHERE poiId_from = '" + poiList.get(j-1).getPoiId() + "' AND poiId_to = '"
 						//		+ poiList.get(k-1).getPoiId() + "';";
 						//List<Map<String, Object>> queryForDistance = analyticsjdbc.queryForList(sql);
 						//distance[j][k] = Double.parseDouble(queryForDistance.get(0).get("distance").toString());
@@ -1313,107 +1313,12 @@ public class Scheduling2 {
 	private String getPartialSqlWithDistance(String poiId, String distanceLB, String distanceUB) {
 		String result = "(poiId_from = '" + poiId + "'";		
 		if (distanceLB != null)
-			result = result + " AND distance >= " + distanceLB;
+			result = result + " AND distanceCircle >= " + distanceLB;
 		if (distanceUB != null)
-			result = result + " AND distance <= " + distanceUB;
+			result = result + " AND distanceCircle <= " + distanceUB;
 		result = result + ")";
 		return result;
 	}
-
-	
-	/*@RequestMapping(method=RequestMethod.GET, value="/mip2")
-	public @ResponseBody void testMipModel2() throws FileNotFoundException, IOException {
-	
-		DailyInfo dailyInfo = new DailyInfo();
-		Calendar calendar = Calendar.getInstance();
-		calendar.set(Calendar.YEAR, 2015);
-		calendar.set(Calendar.MONTH, Calendar.SEPTEMBER);
-		calendar.set(Calendar.DAY_OF_MONTH, 19);
-		dailyInfo.setCalendarForDay(calendar);
-		dailyInfo.setDayOfWeek(calendar.get(Calendar.DAY_OF_WEEK) - 1); //0:Sun, 1:Mon, ..., 6:Sat
-		dailyInfo.setStartTimeInMinutes(8 * 60);
-		dailyInfo.setEndTimeInMinutes(13 * 60);
-		dailyInfo.setMustCounty("all");
-		String dayOfWeekStr = daysOfWeekName[calendar.get(Calendar.DAY_OF_WEEK) - 1];
-		String itineraryStartPoiId = null;
-		itineraryStartPoiId = searchNearbyPoiIdByCoordinate(25.0584759, 121.5548724);
-		List<Map<String, Object>> queryResultInit = analyticsjdbc.queryForList("SELECT * FROM Scheduling2_bkup WHERE poiId = '" + itineraryStartPoiId + "';");
-		Poi itineraryStartPoi = new Poi();
-		itineraryStartPoi.setFromQueryResult(queryResultInit.get(0), dayOfWeekStr);
-		itineraryStartPoi.setMustPoi(false);
-		dailyInfo.setStartPoi(itineraryStartPoi);
-		List<Poi> poiList = new ArrayList<Poi>();
-		try (FileInputStream fileInputStream = new FileInputStream("C:/Users/wu/Downloads/poi.txt");
-				InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
-				BufferedReader bufferedReader = new BufferedReader(inputStreamReader)) {
-			String line = bufferedReader.readLine();
-			while (line != null) {
-				List<Map<String, Object>> queryResult = analyticsjdbc.queryForList("SELECT * FROM Scheduling2_bkup WHERE poiId = '" + line + "';");
-				if (queryResult.size() > 0) {
-					Poi poi = new Poi();
-					poi.setFromQueryResult(queryResult.get(0), dayOfWeekStr);
-					poi.setMustPoi(false);
-					
-					poiList.add(poi);
-				}
-				line = bufferedReader.readLine();
-			}
-		}
-		dailyInfo.setPoiList(poiList);
-		double[][] distance = new double[poiList.size() + 2][poiList.size() + 2];
-		for (int j = 0; j < poiList.size() + 2; ++j) {
-			Poi poiJ;
-			if (j == 0)
-				poiJ = dailyInfo.getStartPoi();
-			else if (j <= poiList.size())
-				poiJ = poiList.get(j-1);
-			else
-				poiJ = null;
-			
-			for (int k = 0; k < poiList.size() + 2; ++k) {
-				Poi poiK;
-				if (k == 0)
-					poiK = dailyInfo.getStartPoi();
-				else if (k <= poiList.size())
-					poiK = poiList.get(k-1);
-				else
-					poiK = null;
-				
-				if (j == poiList.size() + 1 || k == poiList.size() + 1 || j == k)
-					distance[j][k] = 0;
-				else {
-					distance[j][k] = getGreatCircleDistance(poiJ.getLocation(), poiK.getLocation());
-				}
-			}
-		}
-		int[][] travelTime = new int[poiList.size() + 2][poiList.size() + 2];
-		for (int j = 0; j < poiList.size() + 2; ++j) {
-			for (int k = 0; k < poiList.size() + 2; ++k) {
-				travelTime[j][k] = getTimeFromDistance(distance[j][k]);
-				System.out.print(travelTime[j][k] + " ");
-			}
-			System.out.println();
-		}
-		
-				
-		// solve by LINDO
-		
-		MipModel2 mipModel2 = new MipModel2();
-		mipModel2.setDataUsedInMip(dailyInfo, travelTime);
-		List<TourEvent> mipResults;
-		List<Poi> mipResultsPoi;
-		int status = mipModel2.run1();
-		if (status == 1) {
-			mipModel2.examineSolution();
-			mipResults = mipModel2.extractSolution();
-			mipResultsPoi = mipModel2.extractSolutionPoi();
-			
-		} else {
-			System.out.println("Optimality not reached when solving by LINDO!");
-		}
-		mipModel2.endLindoEnvironment();
-
-	}*/
 	
 	@RequestMapping(method=RequestMethod.GET, value="/dist")
 	public @ResponseBody double testDistance(
@@ -1431,7 +1336,6 @@ public class Scheduling2 {
 		return getGreatCircleDistance(p1, p2);
 	}
 	
-
 	private double getGreatCircleDistance(double[] start, double[] end) { //Equirectangular approximation //{latitude緯度, longitude經度}
 		double PI = 3.14159265;
 		double R = 6371.229; //km

@@ -19,7 +19,7 @@ public class QueryDatabase {
 	}
 	
 	public Poi getPoiByPoiId(String poiId, boolean isMustPoi, int looseType) {
-		String sql = "SELECT * FROM Scheduling2_bkup WHERE poiId = '" + poiId + "'";
+		String sql = "SELECT * FROM Scheduling2 WHERE poiId = '" + poiId + "'";
 		if (isDisplay)
 			System.out.println("[SQL] " + sql);
 		
@@ -39,7 +39,7 @@ public class QueryDatabase {
 	}
 	
 	public List<Poi> getPoiListByPoiIdList(List<String> poiIdList, boolean isMustPoi, int looseType) {
-		String sql = "SELECT * FROM Scheduling2_bkup WHERE poiId = '" + poiIdList.get(0) + "'";
+		String sql = "SELECT * FROM Scheduling2 WHERE poiId = '" + poiIdList.get(0) + "'";
 		for (int i = 1; i < poiIdList.size(); ++i)
 			sql += " OR poiId = '" + poiIdList.get(i) + "'";
 		if (isDisplay)
@@ -71,7 +71,7 @@ public class QueryDatabase {
 		}
 		
 		// countyIndex
-		String sql = "SELECT * FROM Scheduling2_bkup WHERE countyId IN ('TW" + countyIndex.get(0) + "'";
+		String sql = "SELECT * FROM Scheduling2 WHERE countyId IN ('TW" + countyIndex.get(0) + "'";
 		for (int i = 1; i < countyIndex.size(); ++i)
 			sql += ", 'TW" + countyIndex.get(i) + "'";
 		sql += ")";
