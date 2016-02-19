@@ -19,6 +19,17 @@ public class QueryDatabase {
 		this.isDisplay = isDisplay;
 	}
 	
+	public boolean isDisplay() {
+		return isDisplay;
+	}
+	public void setDisplay(boolean isDisplay) {
+		this.isDisplay = isDisplay;
+	}
+	public void display(String string) {
+		if (isDisplay)
+			System.out.println(string);
+	}
+	
 	//---------------------------------
 	//  get POI or POI list by poiId
 	//---------------------------------
@@ -220,10 +231,30 @@ public class QueryDatabase {
 				countyIndex, isMustOpen, orderBy, looseType);
 	}
 	
-	//----------------------------------
-	//  get nearby poiId by coordinate
-	//----------------------------------
+	//-----------------------------------------
+	//  get nearby poiId / POI by coordinate
+	//-----------------------------------------
+	public String getNearbyPoiIdByCoordinate(double[] coordinate) {
+		return getNearbyPoiIdByCoordinate(coordinate[0], coordinate[1]);
+	}
 	public String getNearbyPoiIdByCoordinate(double latitude, double longitude) {
+		List<Map<String, Object>> queryResult = getNearbyQueryResultByCoordinate(latitude, longitude);
+		if (queryResult != null)
+			return queryResult.get(0).get("poiId").toString();
+		else
+			return null;
+	}
+	public Poi getNearbyPoiByCoordinate(double latitude, double longitude, boolean isMustPoi, int looseType) {
+		List<Map<String, Object>> queryResult = getNearbyQueryResultByCoordinate(latitude, longitude);
+		if (queryResult != null) {
+			Poi poi = new Poi();
+			poi.setFromQueryResult(queryResult.get(0), looseType);
+			poi.setMustPoi(isMustPoi);
+			return poi;
+		} else
+			return null;
+	}
+	private List<Map<String, Object>> getNearbyQueryResultByCoordinate(double latitude, double longitude) {
 		
 		final double latitudeLB = 20.9; //21.8976
 		final double latitudeUB = 27.4; //26.3813
@@ -236,6 +267,7 @@ public class QueryDatabase {
 		}
 		
 		double tolerance = 0.01;
+		double toleranceIncrement = 0.01;
 		while (true) {
 			String sql = "SELECT * FROM Scheduling2 WHERE"
 					+ " latitude >= " + (latitude - tolerance) + " AND latitude <= " + (latitude + tolerance)
@@ -249,17 +281,38 @@ public class QueryDatabase {
 				System.out.println("[count] " + queryResult.size());
 			
 			if (! queryResult.isEmpty())
-				return queryResult.get(0).get("poiId").toString();
+				return queryResult;
 			else if (tolerance >= 8) {
 				System.err.println("[!!! Error !!!][PoiQuery getNearbyPoiIdByCoordinate] tolerance exploded!");
 				return null;
 			}
 			else
-				tolerance += 0.01;
+				tolerance += toleranceIncrement;
 		}
 	}
-	public String getNearbyPoiIdByCoordinate(double[] coordinate) {
-		return getNearbyPoiIdByCoordinate(coordinate[0], coordinate[1]);
+	
+	//----------------------------------------
+	//  get centered poiId / POI by POI list
+	//----------------------------------------
+	public String getCenteredPoiIdByPoiList(List<Poi> poiList) {
+		if (poiList == null || poiList.isEmpty())
+			return null;
+		else if (poiList.size() == 1)
+			return poiList.get(0).getPoiId();
+		else {
+			double[] centeredCoordinate = Poi.calculatePoiCenter(poiList);
+			return getNearbyPoiIdByCoordinate( centeredCoordinate[0], centeredCoordinate[1] );
+		}
+	}
+	public Poi getCenteredPoiByPoiList(List<Poi> poiList, int looseType) {
+		if (poiList == null || poiList.isEmpty())
+			return null;
+		else if (poiList.size() == 1)
+			return poiList.get(0);
+		else {
+			double[] centeredCoordinate = Poi.calculatePoiCenter(poiList);
+			return getNearbyPoiByCoordinate( centeredCoordinate[0], centeredCoordinate[1], false, looseType);
+		}
 	}
 }
 

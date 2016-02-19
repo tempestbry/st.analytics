@@ -61,7 +61,9 @@ public class Poi {
 	
 	@Override
 	public String toString() {
-		String str = "[" + poiId + "][" + poiName + "][" + countyId + " " + County.getCountyName(countyId) + "]";
+		//String str = "[" + poiId + "][" + poiName + "][" + countyId + " " + County.getCountyName(countyId) + "]";
+		String str = "[" + poiId + "][" + poiName + "][" + countyId + " " + County.getCountyName(countyId) + "]"
+				+ (isMustPoi() ? " (必景)" : "");
 		return str;
 	}
 	
@@ -159,6 +161,35 @@ public class Poi {
 	public void setIndex(int index) {
 		this.index = index;
 	}
+	
+	//---------------------------------------
+	//  constructor / deep copy constructor
+	//---------------------------------------
+	public Poi() {
+		super();
+	}
+	public Poi(Poi poi) {
+		super();
+		this.poiId = poi.poiId;
+		this.poiName = poi.poiName;
+		this.location = poi.location;
+		this.countyId = poi.countyId;
+		this.checkins = poi.checkins;
+		
+		this.theme = new boolean[poi.theme.length];
+		for (int i = 0; i < poi.theme.length; ++i)
+			this.theme[i] = poi.theme[i];
+		
+		this.stayTime = poi.stayTime;
+		
+		this.openHoursOfSevenDays = new String[poi.openHoursOfSevenDays.length];
+		for (int i = 0; i < poi.openHoursOfSevenDays.length; ++i)
+			this.openHoursOfSevenDays[i] = poi.openHoursOfSevenDays[i];
+		
+		this.distanceMeasure = poi.distanceMeasure;
+		this.isMustPoi = poi.isMustPoi;
+		this.index = poi.index;
+	}
 
 	//---------------------
 	//  static functions
@@ -210,30 +241,31 @@ public class Poi {
 		}
 		double rangeDistanceMeasure = maxDistanceMeasure - minDistanceMeasure;
 		
-		// count user input theme
-		double countUserInputTheme = 0;
-		for (int i = 0; i < 8; ++i)
-			if (userInputTheme[i])
-				++countUserInputTheme;
-		
 		// calculate scores
 		for (int i = 0; i < poiList.size(); ++i) {
+			//1. distance measure
 			double scoresDistanceMeasure = 1;
 			if (rangeDistanceMeasure > 0)
 				scoresDistanceMeasure = 1.0 - (poiList.get(i).getDistanceMeasure() - minDistanceMeasure) / rangeDistanceMeasure;
 			
+			//2. checkins
 			double scoresCheckins = 0;
 			if (poiList.get(i).getCheckins() > 0)
 				scoresCheckins = (1.0 - 1 / Math.pow(poiList.get(i).getCheckins(), 0.02)) * 4;
 			
-			double scoresTheme = 1;
-			if (countUserInputTheme > 0) {
-				double countThemeMatch = 0;
-				for (int j = 0; j < 8; ++j)
-					if (userInputTheme[j] && poiList.get(i).getTheme()[j])
-						++countThemeMatch;
-				scoresTheme = countThemeMatch / countUserInputTheme;
+			//3. theme
+			double scoresTheme = 0;
+			double numerator = 0;
+			double denominator = 0;
+			for (int j = 0; j < 8; ++j) {
+				if (poiList.get(i).getTheme()[j]) {
+					++denominator;
+					if (userInputTheme[j])
+						++numerator;
+				}
 			}
+			if (denominator > 0)
+				scoresTheme = numerator / denominator;
 			
 			scores[i] = scoresDistanceMeasure / 8 + scoresCheckins * 3 / 4 + scoresTheme / 8;
 		}
@@ -279,7 +311,10 @@ public class Poi {
 		calendar0.set(Calendar.MILLISECOND, 0);
 		
 		int timePointer = dailyInfo.getStartTimeInMinutes();
+		
 		boolean isFinishLunch = false;
+		if (dailyInfo.getStartTimeInMinutes() >= earlistLunchTime)
+			isFinishLunch = true;
 		
 		for (int i = 0; i < poiList.size(); ++i) {
 			

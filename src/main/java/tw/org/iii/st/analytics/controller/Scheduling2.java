@@ -46,7 +46,7 @@ public class Scheduling2 {
 	private static int numPoiForSelectionUpperBound = 10;
 	
 	//---------------------------------------------
-	//   API main function: creating itinerary
+	//   API main function: create itinerary
 	//---------------------------------------------
 	@RequestMapping("/QuickPlan")
 	private @ResponseBody
@@ -55,9 +55,11 @@ public class Scheduling2 {
 		Date dateSchedulingStart = new Date(System.currentTimeMillis());
 		
 		QueryDatabase queryDatabase = new QueryDatabase(analyticsjdbc, true);
+		boolean isDisplaySql = true;
+		queryDatabase.setDisplay(isDisplaySql);
 		
 		//--------------------
-		//   preparing data
+		//   prepare data
 		//--------------------
 		List<TourEvent> fullItinerary = new ArrayList<TourEvent>();
 		List<Poi> fullItineraryPoi = new ArrayList<Poi>();
@@ -82,19 +84,21 @@ public class Scheduling2 {
 		
 		// itinerary start and end location
 		GeoPoint gps = input.getGps();
-		String itineraryStartPoiId = null;
-		if (gps != null)
-			itineraryStartPoiId = queryDatabase.getNearbyPoiIdByCoordinate(gps.getLat(), gps.getLng()); //could be null
-		if (itineraryStartPoiId == null)
-			itineraryStartPoiId = "e6449cc1-6047-f3a2-1618-5157c3765714"; //台北火車站 POINT(25.047767 121.517114)
+		Poi itineraryStartPoi = null;
+		if (gps != null) {
+			queryDatabase.display("-get itinerary start Poi");
+			itineraryStartPoi = queryDatabase.getNearbyPoiByCoordinate(gps.getLat(), gps.getLng(), false, looseType); //could be null
+		}
+		if (itineraryStartPoi == null) {
+			String itineraryStartPoiId = "e6449cc1-6047-f3a2-1618-5157c3765714"; //台北火車站 POINT(25.047767 121.517114)
+			queryDatabase.display("-get itinerary start Poi");
+			itineraryStartPoi = queryDatabase.getPoiByPoiId(itineraryStartPoiId, false, looseType);
+		}
 		
-		Poi itineraryStartPoi = queryDatabase.getPoiByPoiId(itineraryStartPoiId, false, looseType);
-		
-		String itineraryEndPoiId = itineraryStartPoiId;
-		Poi itineraryEndPoi = queryDatabase.getPoiByPoiId(itineraryEndPoiId, false, looseType);
+		Poi itineraryEndPoi = new Poi(itineraryStartPoi);
 		
 		//--------------------------------------------
-		//  initializing daily itinerary information
+		//  initialize daily itinerary information
 		//--------------------------------------------
 		boolean isAnyMustCounty = false;
 		List<DailyInfo> fullInfo = new ArrayList<DailyInfo>();
@@ -149,7 +153,7 @@ public class Scheduling2 {
 		//Set<String> selectedPoiInStage1 = new HashSet<String>();
 		
 		//-------------------------------------------------------------
-		// stage 1: assigning poi to each day (must poi or seed poi)
+		// stage 1: assign POI to each day (must POI or seed POI)
 		//  four cases
 		//-------------------------------------------------------------
 		if (! isAnyMustCounty && mustPoiIdList.isEmpty()) {
@@ -256,6 +260,7 @@ public class Scheduling2 {
 					
 				} else {
 					//select seed POI from database for this day
+					queryDatabase.display("-(1B)in the day with must county, get seed Poi");
 					Poi seedPoi = queryDatabase.getRandomPoiByCountyAndOpenDay(dailyInfo.getMustCounty(), dailyInfo.getDayOfWeek(), looseType);
 					dailyInfo.getPoiList().add(seedPoi);
 					
@@ -272,12 +277,14 @@ public class Scheduling2 {
 							DailyInfo dailyInfo2 = fullInfo.get( dayIndicesWithoutMustCounty.get(j) );
 							double latitude = coordinate1[0] + (coordinate2[0] - coordinate1[0]) * (j + 1) / (dayIndicesWithoutMustCounty.size() + 1);
 							double longitude = coordinate1[1] + (coordinate2[1] - coordinate1[1]) * (j + 1) / (dayIndicesWithoutMustCounty.size() + 1);
+							queryDatabase.display("-in the day without must county, get interpolated poiId");
 							String locationInterpolatedPoiId = queryDatabase.getNearbyPoiIdByCoordinate(latitude, longitude);
 							
 							//selecting candidate POIs from database
 							double distanceLB = 0;
 							double distanceUB = 10;
 							double distanceUBIncrement = 5;
+							queryDatabase.display("-get random Poi in radius of interpolated poiId");
 							List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
 									1, 1, locationInterpolatedPoiId, distanceLB, distanceUB, distanceUBIncrement,
 									null, dailyInfo2.getDayOfWeek(), "RAND()", looseType);
@@ -367,7 +374,7 @@ public class Scheduling2 {
 			//----------------------------------------------------------------------------------------
 			
 			//---- obtain must-POI information from database ----
-			
+			queryDatabase.display("-get must Poi");
 			List<Poi> collectedPoiList = queryDatabase.getPoiListByPoiIdList(mustPoiIdList, true, looseType);
 			
 			ClusterInfo[] clusterInfo = new ClusterInfo[numDay];
@@ -518,6 +525,7 @@ public class Scheduling2 {
 					
 					
 					// select additional POIs from database
+					queryDatabase.display("-when #cluster < #day, get seed Poi to fulfill days");
 					List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
 							numDay - numClusterUsed, candidateCountyIndex, "allOpen", looseType);
 					
@@ -601,6 +609,8 @@ public class Scheduling2 {
 			for (int i = 0; i < numDay; ++i) {
 				DailyInfo dailyInfo = fullInfo.get(i);
 				if (dailyInfo.getPoiList().isEmpty()) {
+					queryDatabase.display("-when all Poi in this day are close, get centered poiId");
+					
 					String centerPoiId = queryDatabase.getNearbyPoiIdByCoordinate( clusterInfo[i].getPoiCenter() );
 					
 					double distanceLB = 0;
@@ -613,7 +623,7 @@ public class Scheduling2 {
 						distanceUB = 5;
 						distanceUBIncrement = 5;
 					}
-					
+					queryDatabase.display("-get random Poi in radius of centered poiId");
 					List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
 							1, 1, centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
 							countyIndex, dailyInfo.getDayOfWeek(), "RAND()", looseType);
@@ -740,23 +750,23 @@ public class Scheduling2 {
 		}
 		
 		//------------------------------------------
-		// stage 2: generating complete itinerary
+		// stage 2: generate complete itinerary
 		//------------------------------------------
 		// deciding between-day traffic times
 		
-		// completing itinerary
+		// complete itinerary
 		for (int i = 0; i < numDay; ++i) {
 			DailyInfo dailyInfo = fullInfo.get(i);
 			
 			if (dailyInfo.getStartPoi() == null) {
-				System.err.println("Oooooh!!");
+				System.err.println("Oooooh, shouldn't happen!!");
 				return null;
 			}
 			if (dailyInfo.getEndPoi() == null) { //won't be the last day
-				String tempPoiId = queryDatabase.getNearbyPoiIdByCoordinate( Poi.calculatePoiCenter( fullInfo.get(i+1).getPoiList() ));
-				dailyInfo.setEndPoi( queryDatabase.getPoiByPoiId(tempPoiId, false, looseType) );
+				queryDatabase.display("-get centered Poi by Poi List. use next day's Poi to guide this day's direction");
+				Poi tempPoi = queryDatabase.getCenteredPoiByPoiList( fullInfo.get(i+1).getPoiList(), looseType );
+				dailyInfo.setEndPoi( tempPoi );
 			}
-			
 			
 			List<Poi> poiList = dailyInfo.getPoiList();
 			System.out.println("--- Day " + (i+1) + " --- before adding candidate POIs:");
@@ -782,8 +792,8 @@ public class Scheduling2 {
 					if (isCountyForSearch[j])
 						countyIndexForSearch.add(j);
 				
-				
-				String centerPoiId = queryDatabase.getNearbyPoiIdByCoordinate( Poi.calculatePoiCenter(poiList) );
+				queryDatabase.display("-get centered poiId. use to select candidate Poi");
+				String centerPoiId = queryDatabase.getCenteredPoiIdByPoiList(poiList);
 				
 				//select candidate POIs from database
 				int numSelectionLB = 30;
@@ -791,6 +801,7 @@ public class Scheduling2 {
 				double distanceLB = 0;
 				double distanceUB = 15;
 				double distanceUBIncrement = 5;
+				queryDatabase.display("-get candidate Poi");
 				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
 						numSelectionLB, numSelectionUB, centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
 						countyIndexForSearch, dailyInfo.getDayOfWeek(), "checkinTotal DESC", looseType);
@@ -819,7 +830,7 @@ public class Scheduling2 {
 				poiList.get(j).setIndex(j + 1);
 			dailyInfo.getEndPoi().setIndex(poiList.size() + 1);
 			
-			//obtaining travel time
+			//obtain travel time
 			int[][] travelTime = new int[poiList.size() + 2][poiList.size() + 2];
 			for (int j = 0; j < poiList.size() + 2; ++j) {
 				Poi poiJ;
@@ -976,10 +987,9 @@ public class Scheduling2 {
 				List<TourEvent> itinerary = Poi.getTimeInfoFromFeasibleSequence(resultPoiList, travelTime, dailyInfo, earlistLunchTimeInMinutes, minutesForLunch);
 				
 				// handle if last/first POI will be used
-				
 				if (i < numDay - 1 && ! dailyInfo.isEndPoiUseStayTime()) {
 					resultPoiList.remove( resultPoiList.size() - 1 );
-					itinerary.remove( resultPoiList.size() - 1 );
+					itinerary.remove( itinerary.size() - 1 );
 				}
 				if (i > 0 && ! dailyInfo.isStartPoiUseStayTime()) {
 					resultPoiList.remove(0);
@@ -994,7 +1004,7 @@ public class Scheduling2 {
 					fullInfo.get(i + 1).setStartPoi( resultPoiList.get( resultPoiList.size() - 1 ) );
 				
 			} else if (tourConstructingMethod.equals("mip model 2")) {
-				//solving by LINDO
+				//solve by LINDO
 				
 				/*List<TourEvent> mipResults;
 				List<Poi> mipResultsPoi;
@@ -1036,7 +1046,7 @@ public class Scheduling2 {
 			}
 		}
 		
-		//displaying full itinerary
+		//display full itinerary
 		Calendar calendar = Calendar.getInstance();
 		int dayOfWeek0 = -10;
 		int d = 0;
@@ -1050,7 +1060,8 @@ public class Scheduling2 {
 			}
 
 			System.out.println("[" + fullItinerary.get(i).getStartTime() + "][" + fullItinerary.get(i).getEndTime() + "] "
-					+ fullItineraryPoi.get(i));
+					+ fullItineraryPoi.get(i)
+					+ ( fullItineraryPoi.get(i).getCountyId().equals(fullInfo.get(d-1).getMustCounty()) ? " (必縣)" : "" ));
 		}
 		
 		
@@ -1074,6 +1085,9 @@ public class Scheduling2 {
 			velocity = 8;
 		else
 			velocity = 100.0 * (1.0 - 0.8 / Math.pow(d, 0.2));
+		
+		velocity = velocity / 2.5; //!!
+		
 		return (int)(d / velocity * 60);
 	}
 	private String getPartialSqlWithDistance(String poiId, String distanceLB, String distanceUB) {
@@ -1168,7 +1182,7 @@ public class Scheduling2 {
 	
 	private class ClusterInfo {
 		private List<Poi> poiList = new ArrayList<Poi>();
-		private double[] poiCenter = new double[2];
+		private double[] poiCenter = new double[2]; //used in (1)calculate distance between clusters (2)select POI if all POI in this day are closed
 		
 		public void calculatePoiCenter() {
 			poiCenter = Poi.calculatePoiCenter(poiList);
