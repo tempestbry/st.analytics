@@ -18,6 +18,13 @@ public class DailyInfo {
 	private boolean isEndPoiUseStayTime;
 	private List<Poi> poiList = new ArrayList<Poi>();
 	
+	public int getMustCountyIndex() {
+		return mustCounty.equals("all") ? 0 : Integer.parseInt( mustCounty.replaceAll("[^0-9]", "") );
+	}
+	
+	//------------------------
+	//  auto getter / setter
+	//------------------------
 	public Calendar getCalendarForDay() {
 		return calendarForDay;
 	}

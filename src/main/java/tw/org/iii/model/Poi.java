@@ -17,7 +17,7 @@ public class Poi {
 	private int stayTime;
 	private String[] openHoursOfSevenDays = new String[7];
 	// from database -- sometimes exists
-	private double distanceMeasure; //distance or time
+	private double distanceMeasureToFixedPoi; //distance or time, used to calculate scores
 	
 	// from user input
 	private boolean isMustPoi;
@@ -54,8 +54,8 @@ public class Poi {
 			openHoursOfSevenDays[i] = (tempObj4 != null) ? tempObj4.toString() : null;
 		}
 		
-		if (queryResultPoi.get("distanceMeasure") != null) {
-			distanceMeasure = Double.parseDouble( queryResultPoi.get("distanceMeasure").toString() );
+		if (queryResultPoi.get("distanceMeasureToFixedPoi") != null) {
+			distanceMeasureToFixedPoi = Double.parseDouble( queryResultPoi.get("distanceMeasureToFixedPoi").toString() );
 		}
 	}
 	
@@ -63,7 +63,7 @@ public class Poi {
 	public String toString() {
 		//String str = "[" + poiId + "][" + poiName + "][" + countyId + " " + County.getCountyName(countyId) + "]";
 		String str = "[" + poiId + "][" + poiName + "][" + countyId + " " + County.getCountyName(countyId) + "]"
-				+ (isMustPoi() ? " (必景)" : "");
+				+ (isMustPoi() ? " ~必景~" : "");
 		return str;
 	}
 	
@@ -71,9 +71,13 @@ public class Poi {
 		return openHoursOfSevenDays[day];
 	}
 	
-	//------------------------
-	//  auto getter / setter
-	//------------------------
+	public int getCountyIndex() {
+		return Integer.parseInt( countyId.replaceAll("[^0-9]", "") );
+	}
+	
+	//============================
+	//    auto getter / setter
+	//============================
 	public String getPoiId() {
 		return poiId;
 	}
@@ -138,12 +142,12 @@ public class Poi {
 		this.openHoursOfSevenDays = openHoursOfSevenDays;
 	}
 
-	public double getDistanceMeasure() {
-		return distanceMeasure;
+	public double getDistanceMeasureToFixedPoi() {
+		return distanceMeasureToFixedPoi;
 	}
 
-	public void setDistanceMeasure(double distanceMeasure) {
-		this.distanceMeasure = distanceMeasure;
+	public void setDistanceMeasureToFixedPoi(double distanceMeasureToFixedPoi) {
+		this.distanceMeasureToFixedPoi = distanceMeasureToFixedPoi;
 	}
 
 	public boolean isMustPoi() {
@@ -162,9 +166,9 @@ public class Poi {
 		this.index = index;
 	}
 	
-	//---------------------------------------
-	//  constructor / deep copy constructor
-	//---------------------------------------
+	//===========================================
+	//    constructor / deep copy constructor
+	//===========================================
 	public Poi() {
 		super();
 	}
@@ -186,14 +190,14 @@ public class Poi {
 		for (int i = 0; i < poi.openHoursOfSevenDays.length; ++i)
 			this.openHoursOfSevenDays[i] = poi.openHoursOfSevenDays[i];
 		
-		this.distanceMeasure = poi.distanceMeasure;
+		this.distanceMeasureToFixedPoi = poi.distanceMeasureToFixedPoi;
 		this.isMustPoi = poi.isMustPoi;
 		this.index = poi.index;
 	}
 
-	//---------------------
-	//  static functions
-	//---------------------
+	//========================
+	//    static functions
+	//========================
 	public static double[] parseCoordinate(String str) {
 		String[] spl = str.split(" ");
 		double latitude = Double.parseDouble(spl[0].split("POINT\\(")[1]);
@@ -233,7 +237,7 @@ public class Poi {
 		double minDistanceMeasure = Double.MAX_VALUE;
 		double maxDistanceMeasure = Double.MIN_VALUE;
 		for (Poi poi : poiList) {
-			double distanceMeasure = poi.getDistanceMeasure();
+			double distanceMeasure = poi.getDistanceMeasureToFixedPoi();
 			if (distanceMeasure < minDistanceMeasure)
 				minDistanceMeasure = distanceMeasure;
 			if (distanceMeasure > maxDistanceMeasure)
@@ -246,7 +250,7 @@ public class Poi {
 			//1. distance measure
 			double scoresDistanceMeasure = 1;
 			if (rangeDistanceMeasure > 0)
-				scoresDistanceMeasure = 1.0 - (poiList.get(i).getDistanceMeasure() - minDistanceMeasure) / rangeDistanceMeasure;
+				scoresDistanceMeasure = 1.0 - (poiList.get(i).getDistanceMeasureToFixedPoi() - minDistanceMeasure) / rangeDistanceMeasure;
 			
 			//2. checkins
 			double scoresCheckins = 0;
@@ -400,7 +404,39 @@ public class Poi {
 			return openHours;
 		}
 	}
+	public static double getGreatCircleDistance(double[] start, double[] end) { //Equirectangular approximation //{latitude緯度, longitude經度}
+		double PI = 3.14159265;
+		double R = 6371.229; //km
+
+		double x = (end[1] - start[1]) * PI / 180 * Math.cos((start[0] + end[0]) / 2 * PI / 180);
+		double y = (end[0] - start[0]) * PI / 180;
+		return Math.hypot(x, y) * R; //km
+	}
+
+	public static double getGreatCircleDistance(String start, String end) { //Equirectangular approximation
+		return getGreatCircleDistance(Poi.parseCoordinate(start), Poi.parseCoordinate(end));
+	}
 	
+	public static double[][] getPairwiseCircleDistanceMatrix(List<Poi> poiList) {
+		double[][] distanceMeasure = new double[poiList.size()][poiList.size()];
+		for (int i = 0; i < poiList.size(); ++i) {
+			for (int j = 0; j < poiList.size(); ++j) {
+				if (i == j)
+					continue;
+				distanceMeasure[i][j] = getGreatCircleDistance( poiList.get(i).getLocation(), poiList.get(j).getLocation() );
+			}
+		}
+		return distanceMeasure;
+	}
+	public static double[][] getPairwiseCircleDistanceUpperMatrix(List<Poi> poiList) {
+		double[][] distanceMeasure = new double[poiList.size()][poiList.size()];
+		for (int i = 0; i < poiList.size() - 1; ++i) {
+			for (int j = i + 1; j < poiList.size(); ++j) {
+				distanceMeasure[i][j] = getGreatCircleDistance( poiList.get(i).getLocation(), poiList.get(j).getLocation() );
+			}
+		}
+		return distanceMeasure;
+	}
 /*	public double[] getCoordinate() {
 		double[] coordinate = {latitude, longitude};
 		return coordinate;

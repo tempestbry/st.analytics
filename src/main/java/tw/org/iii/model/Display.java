@@ -34,6 +34,13 @@ public class Display<E> {
 			System.out.println();
 		}
 	}
+	public static void print_2D_Array(double[][] a) {
+		for (int i = 0; i < a.length; ++i) {
+			for (int j = 0; j < a[i].length; ++j)
+				System.out.print(a[i][j] + " ");
+			System.out.println();
+		}
+	}	
 	public static <E> void print_2D_Array(E[][] a) {
 		for (int i = 0; i < a.length; ++i) {
 			for (int j = 0; j < a[i].length; ++j)
@@ -76,6 +83,10 @@ public class Display<E> {
 		print_2D_Array(a);
 	}
 	public static void print_2D_Array(int[][] a, String notes) {
+		System.out.println(notes);
+		print_2D_Array(a);
+	}
+	public static void print_2D_Array(double[][] a, String notes) {
 		System.out.println(notes);
 		print_2D_Array(a);
 	}
