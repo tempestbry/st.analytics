@@ -16,8 +16,12 @@ public class Poi {
 	private boolean[] theme = new boolean[8];
 	private int stayTime;
 	private String[] openHoursOfSevenDays = new String[7];
+	
 	// from database -- sometimes exists
-	private double distanceMeasureToFixedPoi; //distance or time, used to calculate scores
+	private int timeMeasureToFixedPoi; //travel time used to calculate scores
+	
+	// database source
+	private int databaseSource; // 0: analytics.Scheduling2 // 1: ST_V3_ZH_TW.PoiFinalView2
 	
 	// from user input
 	private boolean isMustPoi;
@@ -54,9 +58,47 @@ public class Poi {
 			openHoursOfSevenDays[i] = (tempObj4 != null) ? tempObj4.toString() : null;
 		}
 		
-		if (queryResultPoi.get("distanceMeasureToFixedPoi") != null) {
-			distanceMeasureToFixedPoi = Double.parseDouble( queryResultPoi.get("distanceMeasureToFixedPoi").toString() );
+		if (queryResultPoi.get("timeMeasureToFixedPoi") != null) {
+			timeMeasureToFixedPoi = Integer.parseInt( queryResultPoi.get("timeMeasureToFixedPoi").toString() );
 		}
+		
+		databaseSource = 0;
+	}
+	
+	public void setFromQueryResult_ST(List<Map<String, Object>> queryResult, int looseType) {
+		
+		Map<String, Object> queryResultPoi = queryResult.get(0);
+		
+		poiId = queryResultPoi.get("poiId").toString();
+		poiName = queryResultPoi.get("name").toString();
+		location = queryResultPoi.get("location").toString();
+		countyId = queryResultPoi.get("countyId").toString();
+		
+		Object tempObj1 = queryResultPoi.get("checkinTotal");
+		checkins = (tempObj1 != null) ? Integer.parseInt(tempObj1.toString()) : 0;
+		
+		for (int i = 0; i < queryResult.size(); ++i) {
+			Object tempObj2 = queryResult.get(i).get("themeId");
+			if (tempObj2 != null) {
+				String tempStr = tempObj2.toString();
+				if (tempStr.length() == 4 && tempStr.substring(0, 3).equals("TH1")) {
+					theme[ Integer.parseInt( tempStr.substring(3) ) ] = true;
+				}
+			}
+		}
+		
+		Object tempObj3 = queryResultPoi.get("stayTime");
+		stayTime = (int)( 60 * ( (tempObj3 != null && ! tempObj3.toString().isEmpty()) ? Double.parseDouble(tempObj3.toString()) : 1) );//minutes //no data-->60min
+		if (looseType == 1)
+			stayTime = (int)(1.2 * stayTime);
+		else if (looseType == -1)
+			stayTime = (int)(0.8 * stayTime);
+		
+		for (int i = 0; i < 7; ++i) {
+			openHoursOfSevenDays[i] = null; //database does not provide clean open hours information!!
+		}
+		
+		databaseSource = 1;
 	}
 	
 	@Override
@@ -141,13 +183,21 @@ public class Poi {
 	public void setOpenHoursOfSevenDays(String[] openHoursOfSevenDays) {
 		this.openHoursOfSevenDays = openHoursOfSevenDays;
 	}
-
-	public double getDistanceMeasureToFixedPoi() {
-		return distanceMeasureToFixedPoi;
+	
+	public int getTimeMeasureToFixedPoi() {
+		return timeMeasureToFixedPoi;
 	}
 
-	public void setDistanceMeasureToFixedPoi(double distanceMeasureToFixedPoi) {
-		this.distanceMeasureToFixedPoi = distanceMeasureToFixedPoi;
+	public void setTimeMeasureToFixedPoi(int timeMeasureToFixedPoi) {
+		this.timeMeasureToFixedPoi = timeMeasureToFixedPoi;
+	}
+
+	public int getDatabaseSource() {
+		return databaseSource;
+	}
+
+	public void setDatabaseSource(int databaseSource) {
+		this.databaseSource = databaseSource;
 	}
 
 	public boolean isMustPoi() {
@@ -190,7 +240,8 @@ public class Poi {
 		for (int i = 0; i < poi.openHoursOfSevenDays.length; ++i)
 			this.openHoursOfSevenDays[i] = poi.openHoursOfSevenDays[i];
 		
-		this.distanceMeasureToFixedPoi = poi.distanceMeasureToFixedPoi;
+		this.timeMeasureToFixedPoi = poi.timeMeasureToFixedPoi;
+		this.databaseSource = poi.databaseSource;
 		this.isMustPoi = poi.isMustPoi;
 		this.index = poi.index;
 	}
@@ -198,6 +249,9 @@ public class Poi {
 	//========================
 	//    static functions
 	//========================
+	//-----------------------------------------
+	//    static functions -- miscellaneous
+	//-----------------------------------------
 	public static double[] parseCoordinate(String str) {
 		String[] spl = str.split(" ");
 		double latitude = Double.parseDouble(spl[0].split("POINT\\(")[1]);
@@ -233,24 +287,24 @@ public class Poi {
 	public static double[] calculateScores(List<Poi> poiList, boolean[] userInputTheme) {
 		double[] scores = new double[poiList.size()];
 		
-		// calculate max/min distance measure
-		double minDistanceMeasure = Double.MAX_VALUE;
-		double maxDistanceMeasure = Double.MIN_VALUE;
+		// calculate max/min time measure
+		int minTimeMeasure = Integer.MAX_VALUE;
+		int maxTimeMeasure = Integer.MIN_VALUE;
 		for (Poi poi : poiList) {
-			double distanceMeasure = poi.getDistanceMeasureToFixedPoi();
-			if (distanceMeasure < minDistanceMeasure)
-				minDistanceMeasure = distanceMeasure;
-			if (distanceMeasure > maxDistanceMeasure)
-				maxDistanceMeasure = distanceMeasure;
+			int timeMeasure = poi.getTimeMeasureToFixedPoi();
+			if (timeMeasure < minTimeMeasure)
+				minTimeMeasure = timeMeasure;
+			if (timeMeasure > maxTimeMeasure)
+				maxTimeMeasure = timeMeasure;
 		}
-		double rangeDistanceMeasure = maxDistanceMeasure - minDistanceMeasure;
+		int rangeTimeMeasure = maxTimeMeasure - minTimeMeasure;
 		
 		// calculate scores
 		for (int i = 0; i < poiList.size(); ++i) {
-			//1. distance measure
-			double scoresDistanceMeasure = 1;
-			if (rangeDistanceMeasure > 0)
-				scoresDistanceMeasure = 1.0 - (poiList.get(i).getDistanceMeasureToFixedPoi() - minDistanceMeasure) / rangeDistanceMeasure;
+			//1. time measure
+			double scoresTimeMeasure = 1;
+			if (rangeTimeMeasure > 0)
+				scoresTimeMeasure = 1.0 - (poiList.get(i).getTimeMeasureToFixedPoi() - minTimeMeasure) / rangeTimeMeasure;
 			
 			//2. checkins
 			double scoresCheckins = 0;
@@ -271,7 +325,7 @@ public class Poi {
 			if (denominator > 0)
 				scoresTheme = numerator / denominator;
 			
-			scores[i] = scoresDistanceMeasure / 8 + scoresCheckins * 3 / 4 + scoresTheme / 8;
+			scores[i] = scoresTimeMeasure / 8 + scoresCheckins * 3 / 4 + scoresTheme / 8;
 		}
 		return scores;
 	}
@@ -294,25 +348,57 @@ public class Poi {
 		return shortestTime;
 	}
 	
+	//-----------------------------------------------------------
+	//    static functions -- deal with itinerary feasibility
+	//-----------------------------------------------------------
 	public static boolean checkOpenHoursFeasibility(List<Poi> poiList, int[][] travelTime, DailyInfo dailyInfo,
 			int earlistLunchTime, int minutesForLunch) {
 		
-		if ( getTimeInfoFromFeasibleSequence(poiList, travelTime, dailyInfo, earlistLunchTime, minutesForLunch) != null )
+		List<TourEvent> itinerary = new ArrayList<TourEvent>();
+		if ( getItineraryFromFeasibleSequence(poiList, travelTime, dailyInfo, earlistLunchTime, minutesForLunch, itinerary) >= 0 )
 			return true;
 		else
 			return false;
 	}
 	
-	public static List<TourEvent> getTimeInfoFromFeasibleSequence(List<Poi> poiList, int[][] travelTime, DailyInfo dailyInfo,
-			int earlistLunchTime, int minutesForLunch) {
+	public static int[] getEarliestFeasibleVisitDuration(int currentTime, Poi poi, int dayOfWeek) {
 		
-		List<TourEvent> itinerary = new ArrayList<TourEvent>();
+		String openHoursString = poi.getOpenHoursOfADay(dayOfWeek);
+		int[][] openHours = parseOpenHoursString(openHoursString);
 		
-		Calendar calendar0 = dailyInfo.getCalendarForDay();
-		calendar0.set(Calendar.HOUR_OF_DAY, 0);
-		calendar0.set(Calendar.MINUTE, 0);
-		calendar0.set(Calendar.SECOND, 0);
-		calendar0.set(Calendar.MILLISECOND, 0);
+		int feasibleStartTime = currentTime; //initial guess
+		
+		if (openHours != null && ! openHoursString.equals("00:00-24:00;")) { //open all day (or assume open all day)
+			int j;
+			for (j = 0; j < openHours.length; ++j) {
+				feasibleStartTime = Math.max(currentTime, openHours[j][0]);
+				if ( feasibleStartTime + poi.getStayTime() <= openHours[j][1] )
+					break;
+			}
+			if (j == openHours.length)
+				return null; //infeasible
+		}
+		
+		int endTime = feasibleStartTime + poi.getStayTime();
+		int[] visitDuration = new int[]{feasibleStartTime, endTime};
+		return visitDuration;
+	}
+	public static TourEvent createTourEvent(String poiId, Calendar calendar0, int startTime, int endTime) {
+		TourEvent tourEvent = new TourEvent();
+		tourEvent.setPoiId(poiId);
+		
+		Calendar calendarStartTime = (Calendar)calendar0.clone();
+		calendarStartTime.add(Calendar.MINUTE, startTime);
+		tourEvent.setStartTime(calendarStartTime.getTime());
+		
+		Calendar calendarEndTime = (Calendar)calendar0.clone();
+		calendarEndTime.add(Calendar.MINUTE, endTime);
+		tourEvent.setEndTime(calendarEndTime.getTime());
+		
+		return tourEvent;
+	}
+	public static int getItineraryFromFeasibleSequence(List<Poi> poiList, int[][] travelTime, DailyInfo dailyInfo,
+			int earlistLunchTime, int minutesForLunch, List<TourEvent> itinerary) {
 		
 		int timePointer = dailyInfo.getStartTimeInMinutes();
 		
@@ -327,65 +413,50 @@ public class Poi {
 			
 			// handle stay time
 			if ( (i == 0 && ! dailyInfo.isStartPoiUseStayTime()) || (i == poiList.size() - 1 && ! dailyInfo.isEndPoiUseStayTime()) ) {
+				// case: no need to check stay time
 				startTime = timePointer;
 				endTime = timePointer;
-				//timePointer unchanged
-			} else {
-				String openHoursString = poiList.get(i).getOpenHoursOfADay( dailyInfo.getDayOfWeek() );
-				int[][] openHours = parseOpenHoursString(openHoursString);
-				int feasibleStartTime = -1;
 				
-				if (openHours == null || openHoursString.equals("00:00-24:00;")) { //open all day (or assume open all day)
-					feasibleStartTime = timePointer;
-				} else {
-					int j;
-					for (j = 0; j < openHours.length; ++j) {
-						feasibleStartTime = Math.max(timePointer, openHours[j][0]);
-						if ( feasibleStartTime + poiList.get(i).getStayTime() <= openHours[j][1] )
-							break;
-					}
-					if (j == openHours.length)
-						return null;
+			} else {
+				//case: need to check stay time
+				int[] visitDuration = getEarliestFeasibleVisitDuration(timePointer, poiList.get(i), dailyInfo.getDayOfWeek());
+				
+				if (visitDuration == null)
+					return -1; //infeasible
+				else {
+					startTime = visitDuration[0];
+					endTime = visitDuration[1];
+					timePointer = endTime;
 				}
-				startTime = feasibleStartTime;
-				endTime = startTime + poiList.get(i).getStayTime();
-				timePointer = endTime;
 			}
 			
 			// put into TourEvent
-			TourEvent tourEvent = new TourEvent();
-			tourEvent.setPoiId(poiList.get(i).getPoiId());
-			
-			Calendar calendarStartTime = (Calendar)calendar0.clone();
-			calendarStartTime.add(Calendar.MINUTE, startTime);
-			tourEvent.setStartTime(calendarStartTime.getTime());
-			
-			Calendar calendarEndTime = (Calendar)calendar0.clone();
-			calendarEndTime.add(Calendar.MINUTE, endTime);
-			tourEvent.setEndTime(calendarEndTime.getTime());
-			
+			TourEvent tourEvent = createTourEvent(poiList.get(i).getPoiId(), dailyInfo.getCalendarThisDayAtMidnight(), startTime, endTime);
 			itinerary.add(tourEvent);
 			
-			// check lunch time
-			if (! isFinishLunch && timePointer >= earlistLunchTime) {
-				timePointer += minutesForLunch;
-				isFinishLunch = true;
-			}
-			
-			// handle travel time
-			if ( i < poiList.size() - 2 || (i == poiList.size() - 2 && dailyInfo.isTravelToEndPoi()) )
-				timePointer += travelTime[ poiList.get(i).getIndex() ][ poiList.get(i+1).getIndex() ];
+			if (i < poiList.size() - 1) {
+				
+				// check lunch time
+				if (! isFinishLunch && timePointer >= earlistLunchTime) {
+					timePointer += minutesForLunch;
+					isFinishLunch = true;
+				}
+				
+				// handle travel time
+				if ( i < poiList.size() - 2 || (i == poiList.size() - 2 && dailyInfo.isTravelToEndPoi()) )
+					timePointer += travelTime[ poiList.get(i).getIndex() ][ poiList.get(i+1).getIndex() ];
 
-			// check lunch time
-			if (! isFinishLunch && timePointer >= earlistLunchTime) {
-				timePointer += minutesForLunch;
-				isFinishLunch = true;
+				// check lunch time
+				if (! isFinishLunch && timePointer >= earlistLunchTime) {
+					timePointer += minutesForLunch;
+					isFinishLunch = true;
+				}
 			}
 		}
 		if (timePointer <= dailyInfo.getEndTimeInMinutes())
-			return itinerary;
+			return dailyInfo.getEndTimeInMinutes() - timePointer;
 		else
-			return null;
+			return -1; //infeasible
 	}
 	
 	public static int[][] parseOpenHoursString(String str) {
@@ -404,6 +475,10 @@ public class Poi {
 			return openHours;
 		}
 	}
+	
+	//-----------------------------------------------------------
+	//    static functions -- relate to great circle distance
+	//-----------------------------------------------------------
 	public static double getGreatCircleDistance(double[] start, double[] end) { //Equirectangular approximation //{latitude緯度, longitude經度}
 		double PI = 3.14159265;
 		double R = 6371.229; //km

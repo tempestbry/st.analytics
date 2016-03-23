@@ -6,17 +6,16 @@ import java.util.List;
 
 public class DailyInfo {
 	
-	private Calendar calendarForDay;
+	private Calendar calendarThisDayAtMidnight;
 	private int dayOfWeek; //0:Sun, 1:Mon, ..., 6:Sat
 	private int startTimeInMinutes; //In MIP2
 	private int endTimeInMinutes; //In MIP2
 	private String mustCounty; //In MIP2
 	private Poi startPoi;
-	private Poi endPoi;
 	private boolean isStartPoiUseStayTime;
+	private Poi endPoi;
 	private boolean isTravelToEndPoi;
 	private boolean isEndPoiUseStayTime;
-	private List<Poi> poiList = new ArrayList<Poi>();
 	
 	public int getMustCountyIndex() {
 		return mustCounty.equals("all") ? 0 : Integer.parseInt( mustCounty.replaceAll("[^0-9]", "") );
@@ -25,15 +24,16 @@ public class DailyInfo {
 	//------------------------
 	//  auto getter / setter
 	//------------------------
-	public Calendar getCalendarForDay() {
-		return calendarForDay;
-	}
-	public void setCalendarForDay(Calendar calendarForDay) {
-		this.calendarForDay = calendarForDay;
-	}
 	public int getDayOfWeek() {
 		return dayOfWeek;
 	}
+	public Calendar getCalendarThisDayAtMidnight() {
+		return calendarThisDayAtMidnight;
+	}
+	public void setCalendarThisDayAtMidnight(Calendar calendarThisDayAtMidnight) {
+		this.calendarThisDayAtMidnight = calendarThisDayAtMidnight;
+	}
+
 	public void setDayOfWeek(int dayOfWeek) {
 		this.dayOfWeek = dayOfWeek;
 	}
@@ -61,17 +61,17 @@ public class DailyInfo {
 	public void setStartPoi(Poi startPoi) {
 		this.startPoi = startPoi;
 	}
-	public Poi getEndPoi() {
-		return endPoi;
-	}
-	public void setEndPoi(Poi endPoi) {
-		this.endPoi = endPoi;
-	}
 	public boolean isStartPoiUseStayTime() {
 		return isStartPoiUseStayTime;
 	}
 	public void setStartPoiUseStayTime(boolean isStartPoiUseStayTime) {
 		this.isStartPoiUseStayTime = isStartPoiUseStayTime;
+	}
+	public Poi getEndPoi() {
+		return endPoi;
+	}
+	public void setEndPoi(Poi endPoi) {
+		this.endPoi = endPoi;
 	}
 	public boolean isTravelToEndPoi() {
 		return isTravelToEndPoi;
@@ -84,11 +84,5 @@ public class DailyInfo {
 	}
 	public void setEndPoiUseStayTime(boolean isEndPoiUseStayTime) {
 		this.isEndPoiUseStayTime = isEndPoiUseStayTime;
-	}
-	public List<Poi> getPoiList() {
-		return poiList;
-	}
-	public void setPoiList(List<Poi> poiList) {
-		this.poiList = poiList;
 	}
 }

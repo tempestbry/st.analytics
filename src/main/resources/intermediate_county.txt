@@ -1,3 +1,4 @@
+baseCountyIndex_from baseCountyIndex_to [intermediateCountyIndex...]
 1 1
 1 2
 1 3 2

@@ -1,7 +1,12 @@
 package tw.org.iii.model;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -14,11 +19,14 @@ public class QueryDatabase {
 	
 	public static final String[] daysOfWeekName = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 	
-	private JdbcTemplate analyticsjdbc;
+	private JdbcTemplate analyticsJdbc;
+	private JdbcTemplate stJdbc;
+	
 	private boolean isDisplay;
 	
-	public QueryDatabase(JdbcTemplate analyticsjdbc, boolean isDisplay) {
-		this.analyticsjdbc = analyticsjdbc;
+	public QueryDatabase(JdbcTemplate analyticsJdbc, JdbcTemplate stJdbc, boolean isDisplay) {
+		this.analyticsJdbc = analyticsJdbc;
+		this.stJdbc = stJdbc;
 		this.isDisplay = isDisplay;
 	}
 	
@@ -42,7 +50,7 @@ public class QueryDatabase {
 		if (isDisplay)
 			System.out.println("[SQL] " + sql);
 		
-		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
+		List<Map<String, Object>> queryResult = analyticsJdbc.queryForList(sql);
 		if (isDisplay)
 			System.out.println("[count] " + queryResult.size());
 		
@@ -64,23 +72,60 @@ public class QueryDatabase {
 		if (isDisplay)
 			System.out.println("[SQL] " + sql);
 		
-		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
+		List<Map<String, Object>> queryResult = analyticsJdbc.queryForList(sql);
 		if (isDisplay)
 			System.out.println("[count] " + queryResult.size());
 		
-		if (queryResult.size() != poiIdList.size()) {
-			System.err.println("[!!! Error !!!][PoiQuery getPoiListByPoiIdList] Some poiId not found!");
-			return null;
-		} else {
-			List<Poi> poiList = new ArrayList<Poi>();
-			for (int i = 0; i < queryResult.size(); ++i) {
-				Poi poi = new Poi();
-				poi.setFromQueryResult(queryResult.get(i), looseType);
-				poi.setMustPoi(isMustPoi);
-				poiList.add(poi);
-			}
-			return poiList;
+		List<Poi> poiList = new ArrayList<Poi>();
+		for (int i = 0; i < queryResult.size(); ++i) {
+			Poi poi = new Poi();
+			poi.setFromQueryResult(queryResult.get(i), looseType);
+			poi.setMustPoi(isMustPoi);
+			poiList.add(poi);
 		}
+		
+		// if there is any POI id which is not in database "analytics.Scheduling2", then try to find it in "ST_V3_ZH_TW.PoiFinalView2"
+		List<String> poiIdListInST;
+		if (poiList.size() < poiIdList.size()) {
+			poiIdListInST = new ArrayList<String>();
+			
+			// get missing poiId
+			for (String poiId : poiIdList) {
+				boolean isFound = false;
+				for (Poi poi : poiList) {
+					if (poiId.equals( poi.getPoiId() )) {
+						isFound = true;
+						break;
+					}
+				}
+				if (! isFound) {
+					poiIdListInST.add(poiId);
+					if (poiIdListInST.size() == poiIdList.size() - poiList.size())
+						break;
+				}
+			}
+			
+			// query
+			for (String poiId : poiIdListInST) {
+				String sql2 = "SELECT id AS poiId, ASTEXT(location) AS location, countyId, name, checkinTotal, stayTime, themeId FROM PoiFinalView2"
+						+ " WHERE id = '" + poiId + "'";
+				if (isDisplay)
+					System.out.println("[SQL] " + sql2);
+				
+				List<Map<String, Object>> queryResult2 = stJdbc.queryForList(sql2);
+				if (isDisplay)
+					System.out.println("[count] " + queryResult2.size());
+				
+				if (queryResult2.size() > 0) {
+					Poi poi = new Poi();
+					poi.setFromQueryResult_ST(queryResult2, looseType);
+					poi.setMustPoi(isMustPoi);
+					poiList.add(poi);
+				}
+			}
+		}
+		
+		return poiList;
 	}
 	
 	//===========================================================
@@ -114,7 +159,7 @@ public class QueryDatabase {
 		if (isDisplay)
 			System.out.println("[SQL] " + sql);
 		
-		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
+		List<Map<String, Object>> queryResult = analyticsJdbc.queryForList(sql);
 		if (isDisplay)
 			System.out.println("[count] " + queryResult.size());
 		
@@ -168,23 +213,23 @@ public class QueryDatabase {
 	//    get (random) POI list by (1)center poiId (2)county (not necessarily) (3)open day
 	//========================================================================================
 	private List<Poi> getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(int numSelectionLB, int numSelectionUB,
-			String centerPoiId, double distanceLB, double distanceUB, double distanceUBIncrement,
+			String centerPoiId, int timeLB, int timeUB, int timeUBIncrement,
 			Set<Integer> counties, boolean[] isMustOpen, String orderBy, int looseType) {
-		//usage:	enter distanceLB <= 0 if not used
-		//		enter distanceUB <= 0 if not used  (at least one of distanceLB/distanceUB has to be > 0)
-		//		enter distanceUBIncrement = 0 if not used
+		//usage:	enter timeLB <= 0 if not used
+		//		enter timeUB <= 0 if not used  (at least one of timeLB/timeUB has to be > 0)
+		//		enter timeUBIncrement = 0 if not used
 		//		counties is allowed to be null or empty
-		if (distanceLB <= 0 && distanceUB <= 0) {
-			System.err.println("[!!! Error !!!][PoiQuery getRandomPoiListByCenterPoiIdAndCountyAndOpenDay] distanceLB and distanceUB are both <= 0 !");
+		if (timeLB <= 0 && timeUB <= 0) {
+			System.err.println("[!!! Error !!!][PoiQuery getRandomPoiListByCenterPoiIdAndCountyAndOpenDay] timeLB and timeUB are both <= 0 !");
 			return null;
 		}
-		double distanceUBForTermination = 100;
+		int timeUBForTermination = 150; //2.5 hours
 		
 		List<Map<String, Object>> queryResult;
 		while (true) {
-			String sql = "SELECT c.*, distance AS distanceMeasureToFixedPoi FROM "
-					+ "(SELECT poiId_to, distance FROM Distance WHERE ("
-					+ getPartialSqlWithCenterPoiId(centerPoiId, distanceLB, distanceUB)
+			String sql = "SELECT c.*, time AS timeMeasureToFixedPoi FROM "
+					+ "(SELECT poiId_to, time FROM Distance WHERE ("
+					+ getPartialSqlWithCenterPoiId(centerPoiId, timeLB, timeUB)
 					+ ")) b LEFT JOIN Scheduling2 c ON b.poiId_to = c.poiId";
 			// county
 			if (counties != null && ! counties.isEmpty()) {
@@ -212,14 +257,14 @@ public class QueryDatabase {
 			if (isDisplay)
 				System.out.println("[SQL] " + sql);
 			
-			queryResult = analyticsjdbc.queryForList(sql);
+			queryResult = analyticsJdbc.queryForList(sql);
 			if (isDisplay)
 				System.out.println("[count] " + queryResult.size());
 			
-			if (queryResult.size() >= numSelectionLB || distanceUBIncrement == 0 || distanceUB > distanceUBForTermination)
+			if (queryResult.size() >= numSelectionLB || timeUBIncrement == 0 || timeUB > timeUBForTermination)
 				break;
 			else
-				distanceUB += distanceUBIncrement;
+				timeUB += timeUBIncrement;
 		}
 		
 		List<Poi> poiList = new ArrayList<Poi>();
@@ -231,22 +276,22 @@ public class QueryDatabase {
 		}
 		return poiList;
 	}
-	private String getPartialSqlWithCenterPoiId(String poiId, double distanceLB, double distanceUB) {
+	private String getPartialSqlWithCenterPoiId(String poiId, int timeLB, int timeUB) {
 		String result = "(poiId_from = '" + poiId + "'";		
-		if (distanceLB > 0)
-			result = result + " AND distance >= " + distanceLB;
-		if (distanceUB > 0)
-			result = result + " AND distance <= " + distanceUB;
+		if (timeLB > 0)
+			result = result + " AND time >= " + timeLB;
+		if (timeUB > 0)
+			result = result + " AND time <= " + timeUB;
 		result = result + ")";
 		return result;
 	}
 	public List<Poi> getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(int numSelectionLB, int numSelectionUB,
-			String centerPoiId, double distanceLB, double distanceUB, double distanceUBIncrement,
+			String centerPoiId, int timeLB, int timeUB, int timeUBIncrement,
 			Set<Integer> counties, int mustOpenDay, String orderBy, int looseType) {
 		boolean[] isMustOpen = new boolean[7];
 		isMustOpen[mustOpenDay] = true;
 		return getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(numSelectionLB, numSelectionUB,
-				centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
+				centerPoiId, timeLB, timeUB, timeUBIncrement,
 				counties, isMustOpen, orderBy, looseType);
 	}
 	
@@ -295,7 +340,7 @@ public class QueryDatabase {
 			if (isDisplay)
 				System.out.println("[SQL] " + sql);
 			
-			List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
+			List<Map<String, Object>> queryResult = analyticsJdbc.queryForList(sql);
 			if (isDisplay)
 				System.out.println("[count] " + queryResult.size());
 			
@@ -337,39 +382,81 @@ public class QueryDatabase {
 	//======================================
 	//    get pairwise distance and time
 	//======================================
-	public void getDistanceAndTimeMatrix(List<String> poiIdList, double[][] distance, int[][] time) {
-		int numPoi = poiIdList.size();
+	public void getDistanceAndTimeMatrix(List<Poi> poiList, double[][] distance, int[][] time) {
+		int numPoi = poiList.size();
 		
 		// get poiSet string to be used in sql
 		String poiSet = "";
 		boolean isFirst = true;
 		for (int i = 0; i < numPoi; ++i) {
 			if (isFirst) {
-				poiSet += "'" + poiIdList.get(i) + "'";
+				poiSet += "'" + poiList.get(i).getPoiId() + "'";
 				isFirst = false;
 			} else {
-				poiSet += ", '" + poiIdList.get(i) + "'";
+				poiSet += ", '" + poiList.get(i).getPoiId() + "'";
 			}
 		}
 		
-		String sql = "SELECT * FROM Distance WHERE poiId_from IN (" + poiSet + ")"
-				+ " AND poiId_to IN (" + poiSet + ") ";
+		String sql = "SELECT poiId_from, poiId_to, distance, time FROM Distance WHERE poiId_from IN (" + poiSet + ")"
+				+ " AND poiId_to IN (" + poiSet + ")";
 		if (isDisplay)
 			System.out.println("[SQL] " + sql);
 		
-		List<Map<String, Object>> queryResult = analyticsjdbc.queryForList(sql);
+		List<Map<String, Object>> queryResult = analyticsJdbc.queryForList(sql);
 		if (isDisplay)
 			System.out.println("[count] " + queryResult.size());
 		
+		// there are cases that some POI in poiList are duplicated: (1)startPoi=endPoi, (2)cases involve interpolated POI
+		// poiIdToIndex is used to deal with these cases.
+		Map<String, List<Integer>> poiIdToIndex = new HashMap<String, List<Integer>>();
+		for (int i = 0; i < numPoi; ++i) {
+			if (! poiIdToIndex.containsKey( poiList.get(i).getPoiId() ) ) {
+				List<Integer> temp = new ArrayList<Integer>();
+				temp.add(i);
+				poiIdToIndex.put( poiList.get(i).getPoiId(), temp );
+			} else {
+				poiIdToIndex.get( poiList.get(i).getPoiId() ).add(i);
+			}
+		}
 		for (int i = 0; i < queryResult.size(); ++i) {
-			int j = poiIdList.indexOf( queryResult.get(i).get("poiId_from").toString() );
-			int k = poiIdList.indexOf( queryResult.get(i).get("poiId_to").toString() );
-			if (distance != null)
-				distance[j][k] = Double.parseDouble( queryResult.get(i).get("distance").toString() );
-			if (time != null)
-				time[j][k] = Integer.parseInt( queryResult.get(i).get("time").toString() );
+			List<Integer> js = poiIdToIndex.get( queryResult.get(i).get("poiId_from").toString() );
+			List<Integer> ks = poiIdToIndex.get( queryResult.get(i).get("poiId_to").toString() );
+			for (int j : js) {
+				for (int k : ks) {
+					if (distance != null)
+						distance[j][k] = Double.parseDouble( queryResult.get(i).get("distance").toString() );
+					if (time != null)
+						time[j][k] = Integer.parseInt( queryResult.get(i).get("time").toString() );
+				}
+			}
+		}
+		
+		// distance/time of POIs where at least one of them has databaseSource==1
+		List<Integer> poiIndexFromDatbaseSourceOne = new ArrayList<Integer>();
+		for (int i = 0; i < poiList.size(); ++i) {
+			if (poiList.get(i).getDatabaseSource() == 1)
+				poiIndexFromDatbaseSourceOne.add(i);
+		}
+		
+		if (! poiIndexFromDatbaseSourceOne.isEmpty()) {
+			double[] distanceOfPoiPair = new double[1];
+			int[] timeOfPoiPair = new int[1];
+			for (Integer i : poiIndexFromDatbaseSourceOne) {
+				for (int j = 0; j < poiList.size(); ++j) {
+					if (i == j)
+						continue;
+					DistanceAndTime.getFittingDistanceAndTime( poiList.get(i), poiList.get(j), distanceOfPoiPair, timeOfPoiPair);
+					if (distance != null) {
+						distance[i][j] = distanceOfPoiPair[0];
+						distance[j][i] = distanceOfPoiPair[0];
+					}
+					if (time != null) {
+						time[i][j] = timeOfPoiPair[0];
+						time[j][i] = timeOfPoiPair[0];
+					}
+				}
+			}
 		}
 	}
-	
 }
 

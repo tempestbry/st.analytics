@@ -32,13 +32,10 @@ import tw.org.iii.model.TourEvent;
 import tw.org.iii.model.SchedulingInput;
 import tw.org.iii.model.DailyInfo;
 import tw.org.iii.model.Display;
-import tw.org.iii.model.DistanceAndTimeEstimation;
+import tw.org.iii.model.DistanceAndTime;
 import tw.org.iii.model.GeoPoint;
 import tw.org.iii.model.HungarianAlgorithm;
 import tw.org.iii.model.County;
-
-//TODO: for POI which is not in Table Scheduling2, get data from PoiFinalView2.
-//TODO: several consecutive days without mustCounty --> smarter POI choices
 
 @RestController
 @RequestMapping("/Scheduling2")
@@ -46,7 +43,11 @@ public class Scheduling2 {
 	
 	@Autowired
 	@Qualifier("analyticsJdbcTemplate")
-	private JdbcTemplate analyticsjdbc;
+	private JdbcTemplate analyticsJdbc;
+	
+	@Autowired
+	@Qualifier("stJdbcTemplate")
+	private JdbcTemplate stJdbc;
 	
 	//---- Parameters ----//
 	private static final int startTimeEachDayInMinutes = 8 * 60;
@@ -56,10 +57,7 @@ public class Scheduling2 {
 	
 	private static final int numPoiForSelectionUpperBound = 10;
 	
-	private static final int mustMergingDistanceMeasureBound = 5;
-	
-	//---- Constants ----//
-	private static final int numCounty = 22;
+	private static final int mustMergingTimeMeasureBound = 20;
 	
 	//===========================================
 	//    API main function: create itinerary
@@ -74,7 +72,7 @@ public class Scheduling2 {
 			int count = 0;
 			try {
 //				analyticsjdbc.queryForList("SELECT poiId FROM Scheduling2 LIMIT 1");
-				analyticsjdbc.queryForList("SELECT poiId FROM Scheduling2 WHERE poiId = 'e6449cc1-6047-f3a2-1618-5157c3765714'");
+				analyticsJdbc.queryForList("SELECT poiId FROM Scheduling2 WHERE poiId = 'e6449cc1-6047-f3a2-1618-5157c3765714'");
 				break;
 				
 			} catch (RecoverableDataAccessException e) {
@@ -89,13 +87,12 @@ public class Scheduling2 {
 		
 		Date dateSchedulingStart = new Date(System.currentTimeMillis());
 		
-		QueryDatabase queryDatabase = new QueryDatabase(analyticsjdbc, true);
 		boolean isDisplaySql = true;
-		queryDatabase.setDisplay(isDisplaySql);
+		QueryDatabase queryDatabase = new QueryDatabase(analyticsJdbc, stJdbc, isDisplaySql);
 		
-		//--------------------
-		//   prepare data
-		//--------------------
+		//-------------------------
+		//    handle input data
+		//-------------------------
 		List<TourEvent> fullItinerary = new ArrayList<TourEvent>();
 		List<Poi> fullItineraryPoi = new ArrayList<Poi>();
 		
@@ -115,103 +112,97 @@ public class Scheduling2 {
 		}
 		
 		int looseType = input.getLooseType(); //寬鬆 = 1, 適中 = 0, 緊湊 = -1
-		List<String> mustPoiIdList = input.getMustPoiList();
+		Set<String> mustPoiIdSet = new HashSet<String>(input.getMustPoiList());
+		List<String> mustPoiIdList = new ArrayList<String>(mustPoiIdSet);
 		
 		// itinerary start and end location
 		GeoPoint gps = input.getGps();
 		Poi itineraryStartPoi = null;
 		if (gps != null) {
-			queryDatabase.display("-get itinerary start Poi");
+			queryDatabase.display("-get itinerary start POI");
 			itineraryStartPoi = queryDatabase.getNearbyPoiByCoordinate(gps.getLat(), gps.getLng(), false, looseType); //could be null
 		}
 		if (itineraryStartPoi == null) {
 			String itineraryStartPoiId = "e6449cc1-6047-f3a2-1618-5157c3765714"; //台北火車站 POINT(25.047767 121.517114)
-			queryDatabase.display("-get itinerary start Poi");
+			queryDatabase.display("-get itinerary start POI");
 			itineraryStartPoi = queryDatabase.getPoiByPoiId(itineraryStartPoiId, false, looseType);
 		}
 		
 		Poi itineraryEndPoi = new Poi(itineraryStartPoi);
 		
-		//--------------------------------------------
-		//  initialize daily itinerary information
-		//--------------------------------------------
+		// if start POI happens to be a must POI 
+		if (mustPoiIdList.contains(itineraryStartPoi.getPoiId())) {
+			itineraryStartPoi.setMustPoi(true);
+			mustPoiIdList.remove( itineraryStartPoi.getPoiId() );
+		}
+		
+		// create and update POI id repository (prevent selecting the same POIs)
+		Set<String> poiIdRepository = new HashSet<String>();
+		poiIdRepository.add(itineraryStartPoi.getPoiId());
+		poiIdRepository.add(itineraryEndPoi.getPoiId());
+		
+		//----------------------------------------------
+		//    initialize daily itinerary information
+		//----------------------------------------------
 		boolean isAnyMustCounty = false;
 		List<DailyInfo> fullInfo = new ArrayList<DailyInfo>();
-		if (numDay == 1) { //包含 "今日行程" 及 "多日行程-一天"
-			
-			int startTimeInMinutes = itineraryStartCalendar.get(Calendar.HOUR_OF_DAY) * 60 + itineraryStartCalendar.get(Calendar.MINUTE);
-			int endTimeInMinutes = itineraryEndCalendar.get(Calendar.HOUR_OF_DAY) * 60 + itineraryEndCalendar.get(Calendar.MINUTE);
-			
+		
+		for (int i = 0; i < numDay; ++i) {
 			DailyInfo dailyInfo = new DailyInfo();
 			
-			dailyInfo.setCalendarForDay((Calendar)itineraryStartCalendar.clone());
-			dailyInfo.setDayOfWeek(dailyInfo.getCalendarForDay().get(Calendar.DAY_OF_WEEK) - 1); //0:Sun, 1:Mon, ..., 6:Sat
+			Calendar calendar = (Calendar)itineraryStartCalendar.clone();
+			calendar.add(Calendar.DAY_OF_MONTH, i);
+			calendar.set(Calendar.HOUR_OF_DAY, 0);
+			calendar.set(Calendar.MINUTE, 0);
+			calendar.set(Calendar.SECOND, 0);
+			calendar.set(Calendar.MILLISECOND, 0);
+			dailyInfo.setCalendarThisDayAtMidnight(calendar);
+			
+			dailyInfo.setDayOfWeek(dailyInfo.getCalendarThisDayAtMidnight().get(Calendar.DAY_OF_WEEK) - 1); //0:Sun, 1:Mon, ..., 6:Sat
+			
+			int startTimeInMinutes;
+			int endTimeInMinutes;
+			if (numDay == 1) {
+				startTimeInMinutes = itineraryStartCalendar.get(Calendar.HOUR_OF_DAY) * 60 + itineraryStartCalendar.get(Calendar.MINUTE);
+				endTimeInMinutes = itineraryEndCalendar.get(Calendar.HOUR_OF_DAY) * 60 + itineraryEndCalendar.get(Calendar.MINUTE);
+			} else {
+				startTimeInMinutes = startTimeEachDayInMinutes;
+				endTimeInMinutes = endTimeEachDayInMinutes;
+			}
 			dailyInfo.setStartTimeInMinutes(startTimeInMinutes);
 			dailyInfo.setEndTimeInMinutes(endTimeInMinutes);
-			dailyInfo.setMustCounty(input.getCityList().get(0));
-			if (! input.getCityList().get(0).equals("all"))
+			
+			dailyInfo.setMustCounty(input.getCityList().get(i));
+			if (! input.getCityList().get(i).equals("all"))
 				isAnyMustCounty = true;
 			
-			dailyInfo.setStartPoi(itineraryStartPoi);
-			dailyInfo.setEndPoi(itineraryEndPoi);
-			
-			dailyInfo.setStartPoiUseStayTime(false);
-			dailyInfo.setTravelToEndPoi(true);
-			dailyInfo.setEndPoiUseStayTime(false);
+			if (i == 0) {
+				dailyInfo.setStartPoi(itineraryStartPoi);
+				dailyInfo.setStartPoiUseStayTime( itineraryStartPoi.isMustPoi() );
+			}
+			if (i == numDay - 1) {
+				dailyInfo.setEndPoi(itineraryEndPoi);
+				dailyInfo.setTravelToEndPoi(true);
+				dailyInfo.setEndPoiUseStayTime(false);
+			}
 			
 			fullInfo.add(dailyInfo);
 		}
-		else { //包含 "多日行程-兩天(含)以上"
-			for (int i = 0; i < numDay; ++i) {
-				DailyInfo dailyInfo = new DailyInfo();
-				
-				dailyInfo.setCalendarForDay((Calendar)itineraryStartCalendar.clone());
-				dailyInfo.getCalendarForDay().add(Calendar.DAY_OF_MONTH, i);
-				dailyInfo.setDayOfWeek(dailyInfo.getCalendarForDay().get(Calendar.DAY_OF_WEEK) - 1); //0:Sun, 1:Mon, ..., 6:Sat
-				dailyInfo.setStartTimeInMinutes(startTimeEachDayInMinutes);
-				dailyInfo.setEndTimeInMinutes(endTimeEachDayInMinutes);
-				dailyInfo.setMustCounty(input.getCityList().get(i));
-				if (! input.getCityList().get(i).equals("all"))
-					isAnyMustCounty = true;
-				
-				dailyInfo.setStartPoi( i == 0 ? itineraryStartPoi : null );
-				dailyInfo.setEndPoi( i == numDay - 1 ? itineraryEndPoi : null );
-				
-				dailyInfo.setStartPoiUseStayTime(false);
-				dailyInfo.setTravelToEndPoi( i == numDay-1 ? true : false);
-				dailyInfo.setEndPoiUseStayTime(false);
-				
-				fullInfo.add(dailyInfo);
-			}
-		}
 		
-		//Set<String> selectedPoiInStage1 = new HashSet<String>();
-		
-		//----------------------------------
-		// stage 1: assign POI to each day
-		//----------------------------------
-		
+		//======================================================================
+		//    Stage 1: Overall Planning - schedule necessary POI to each day
+		//======================================================================
 		// get must POI from database
 		List<Poi> mustPoiList = new ArrayList<Poi>();
 		if (! mustPoiIdList.isEmpty()) {
-			queryDatabase.display("-get must Poi");
+			queryDatabase.display("-get must POI");
 			mustPoiList = queryDatabase.getPoiListByPoiIdList(mustPoiIdList, true, looseType);
 		}
+		// update repository
+		poiIdRepository.addAll(mustPoiIdList);
 		
-		// initialize must county info map
-		Map<Integer, MustCountyInfo> mustCountyInfoMap = new HashMap<Integer, MustCountyInfo>(); //key: must county index //value: information
-		for (int i = 0; i < fullInfo.size(); ++i) {
-			if (! fullInfo.get(i).getMustCounty().equals("all")) {
-				int county = fullInfo.get(i).getMustCountyIndex();
-				if ( mustCountyInfoMap.containsKey(county) )
-					mustCountyInfoMap.get(county).days.add(i);
-				else {
-					MustCountyInfo mustCountyInfo = new MustCountyInfo();
-					mustCountyInfo.days.add(i);
-					mustCountyInfoMap.put(county, mustCountyInfo);
-				}
-			}
-		}
+		// initialize mapping of must county v.s. days
+		MustCountyInfo mustCountyInfo = new MustCountyInfo(fullInfo);
 		
 		// for "must county", configure "merging quota" and "additional POI list"
 		Map<Integer, Integer> mergingQuota = new HashMap<Integer, Integer>(); //key: mustCountyIndex, value: quota
@@ -222,12 +213,12 @@ public class Scheduling2 {
 		// (1)adjust merging quota (2)add additional POI, if there is any must county
 		if (isAnyMustCounty) {
 			
-			int[] numMustPoiInCounty = new int[numCounty + 1];
+			int[] numMustPoiInCounty = new int[County.numCounty + 1];
 			for (Poi poi : mustPoiList)
 				++numMustPoiInCounty[ poi.getCountyIndex() ];
 			
-			for (Integer i : mustCountyInfoMap.keySet()) {
-				int numDayOfCounty = mustCountyInfoMap.get(i).getNumDays();
+			for (Integer i : mustCountyInfo.daysMapping.keySet()) {
+				int numDayOfCounty = mustCountyInfo.getNumDays(i);
 				if (numMustPoiInCounty[i] > numDayOfCounty) {
 					mergingQuota.put(i, numMustPoiInCounty[i] - numDayOfCounty);
 					
@@ -239,11 +230,28 @@ public class Scheduling2 {
 						Set<Integer> counties = new HashSet<Integer>();
 						counties.add(i);
 						
-						List<Poi> poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
-								numDayOfCounty - numMustPoiInCounty[i],
-								counties, "free", looseType); // note: not force "allOpen" here, so open days have to be checked in stage 2
+						List<Poi> poiList;
+						boolean isDuplicatedPoi;
+						do {
+							//note: can separate the selections!!!
+							queryDatabase.display("-get additional POI to fullfill must county");
+							poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
+									numDayOfCounty - numMustPoiInCounty[i],
+									counties, "free", looseType); // note: not force "allOpen" here, so open days have to be checked in stage 2
+							isDuplicatedPoi = false;
+							for (Poi poi : poiList) {
+								if (poiIdRepository.contains(poi.getPoiId())) {
+									isDuplicatedPoi = true;
+									break;
+								}
+							}
+						} while (isDuplicatedPoi);
 						
 						additionalPoiList.addAll(poiList);
+						
+						// update repository
+						for (Poi poi : poiList)
+							poiIdRepository.add(poi.getPoiId());
 					}
 				}
 			}
@@ -254,12 +262,13 @@ public class Scheduling2 {
 		List<Poi> basePoiList = new ArrayList<Poi>();
 		basePoiList.addAll(mustPoiList);
 		basePoiList.addAll(additionalPoiList);
-		System.out.println("mustPoiList");
+		System.out.println("\n" + "mustPoiList");
 		for (Poi poi : mustPoiList)
 			System.out.println(poi);
-		System.out.println("additionalPoiList");
+		System.out.println("\n" + "additionalPoiList");
 		for (Poi poi : additionalPoiList)
 			System.out.println(poi);
+		System.out.println();
 		
 		// prepare initial cluster information
 		int[] clusterOfBasePoi = new int[basePoiList.size()]; //POI --> cluster
@@ -267,7 +276,7 @@ public class Scheduling2 {
 		for (int i = 0; i < clusterOfBasePoi.length; ++i) {
 			clusterOfBasePoi[i] = i;
 			int countyIdx = basePoiList.get(i).getCountyIndex();
-			assignedMustCounty[i] = mustCountyInfoMap.containsKey(countyIdx) ? countyIdx : 0; //if not a must county --> 0
+			assignedMustCounty[i] = mustCountyInfo.daysMapping.containsKey(countyIdx) ? countyIdx : 0; //if not a must county --> 0
 		}
 		
 		boolean[] isClusterIdxUsed = new boolean[basePoiList.size()];
@@ -278,12 +287,9 @@ public class Scheduling2 {
 		// clustering when #basePOI > 1
 		if (basePoiList.size() > 1) {
 			// obtain pairwise distances
-			List<String> basePoiIdList = new ArrayList<String>();
-			for (Poi poi : basePoiList)
-				basePoiIdList.add( poi.getPoiId() );
-			
-			double[][] distance = new double[basePoiIdList.size()][basePoiIdList.size()];
-			queryDatabase.getDistanceAndTimeMatrix( basePoiIdList, distance, null );
+			int[][] time = new int[basePoiList.size()][basePoiList.size()];
+			queryDatabase.display("-get time matrix to perform clustering");
+			queryDatabase.getDistanceAndTimeMatrix( basePoiList, null, time );
 			
 			// put (half) distances into priority queue
 			Comparator<PoiPair> comparator = new PoiPairComparator();
@@ -291,7 +297,7 @@ public class Scheduling2 {
 			
 			for (int i = 0; i < basePoiList.size() - 1; ++i) {
 				for (int j = i + 1; j < basePoiList.size(); ++j) {
-					priorityQueue.add( new PoiPair(i, j, distance[i][j]) );
+					priorityQueue.add( new PoiPair(i, j, time[i][j]) );
 				}
 			}
 			
@@ -304,7 +310,7 @@ public class Scheduling2 {
 			while (! priorityQueue.isEmpty()) {
 				PoiPair poiPair = priorityQueue.poll();
 				
-				if (poiPair.distanceMeasure > mustMergingDistanceMeasureBound && numClusterUsed <= numDay)
+				if (poiPair.timeMeasure > mustMergingTimeMeasureBound && numClusterUsed <= numDay)
 					break;
 				else {
 					if ( clusterOfBasePoi[poiPair.poiIdx1] != clusterOfBasePoi[poiPair.poiIdx2] ) { //in different clusters
@@ -394,7 +400,9 @@ public class Scheduling2 {
 //				System.out.println("Cluster " + i + " : TW" + countyId + " " + County.getCountyName(countyId));
 //		}
 		
-		// construct cluster information
+		//-----------------------------
+		//    construct clusterList
+		//-----------------------------
 		List<Cluster> clusterList = new ArrayList<Cluster>();
 		for (int i = 0; i < numClusterUsed; ++i) {
 			Cluster cluster = new Cluster();
@@ -404,6 +412,10 @@ public class Scheduling2 {
 		for (int i = 0; i < basePoiList.size(); ++i) {
 			clusterList.get( finalClusterOfBasePoi[i] ).poiList.add( basePoiList.get(i) );
 		}
+		for (Cluster cluster : clusterList) {
+			queryDatabase.display("-get centered POI of a cluster");
+			cluster.centerPoi = queryDatabase.getCenteredPoiByPoiList( cluster.poiList, looseType );
+		}
 		
 		// display clusters - 1
 //		System.out.println();
@@ -412,22 +424,21 @@ public class Scheduling2 {
 //			System.out.println(i + "\n" + clusterList.get(i));
 //		}
 		
-		// display mustCountyInfo
-//		System.out.println("mustCountyInfoMap");
-//		for (Map.Entry<Integer, MustCountyInfo> entry : mustCountyInfoMap.entrySet()) {
-//			System.out.println(entry.getKey());
-//			System.out.println(entry.getValue());
-//		}
+		//-----------------------------
+		//    construct fullCluster
+		//-----------------------------
+		// move appropriate clusters from "clusterList" to "fullCluster"
+		Cluster[] fullCluster = new Cluster[numDay];
 		
-		// move appropriate clusters from "clusterList" to "mustCountyInfoMap"
-		for (Integer countyIdx : mustCountyInfoMap.keySet()) {
-			for (int i = 0; i < mustCountyInfoMap.get(countyIdx).getNumDays(); ++i) {
+		for (Integer countyIdx : mustCountyInfo.daysMapping.keySet()) {
+			for (int i = 0; i < mustCountyInfo.getNumDays(countyIdx); ++i) {
 				boolean isFound = false;
 				int j;
 				for (j = 0; j < clusterList.size(); ++j) {
 					Cluster cluster = clusterList.get(j);
 					if (cluster.representingMustCounty == countyIdx) {
-						mustCountyInfoMap.get(countyIdx).assignedClusters.add(cluster);
+						
+						fullCluster[ mustCountyInfo.getDays(countyIdx).get(i) ] = new Cluster( cluster );
 						clusterList.remove(j);
 						isFound = true;
 						break;
@@ -440,290 +451,426 @@ public class Scheduling2 {
 			}
 		}
 		
-		// display clusters - after moving
-		System.out.println();
-		System.out.println("clusterList");
-		for (int i = 0; i < clusterList.size(); ++i) {
-			System.out.println(i + "\n" + clusterList.get(i));
-		}
+		// display fullCluster
+//		System.out.println("\n" + "fullCluster --- 1/5 --- finish filling in clusters into must-county-days");
+//		for (int i = 0; i < fullCluster.length; ++i) {
+//			System.out.println(i);
+//			System.out.println(fullCluster[i]);
+//			System.out.println();
+//		}
 		
-		// display mustCountyInfo
-		System.out.println("mustCountyInfoMap");
-		for (Map.Entry<Integer, MustCountyInfo> entry : mustCountyInfoMap.entrySet()) {
-			System.out.println(entry.getKey());
-			System.out.println(entry.getValue());
-		}
+		// display mustCounty
+//		System.out.println("\n" + mustCountyInfo);
 		
-		// put poiList into fullInfo
-		for (Map.Entry<Integer, MustCountyInfo> entry : mustCountyInfoMap.entrySet()) {
-			
-			MustCountyInfo mustCountyInfo = entry.getValue();
-			
-			for (int i = 0; i < mustCountyInfo.getNumDays(); ++i) {
-				fullInfo.get( mustCountyInfo.days.get(i) ).getPoiList().addAll( mustCountyInfo.assignedClusters.get(i).poiList );
-			}
-		}
+		//---------------------------------
+		//    construct blockOfDaysList
+		//---------------------------------
+		List<BlockOfDays> blockOfDaysList = new ArrayList<BlockOfDays>();
 		
-		// construct slot information
-		List<Slot> slotList = new ArrayList<Slot>();
-		
-		// put in slot data: first county, last county, days
 		boolean isSlotStart = false;
-		int tempCounty = itineraryStartPoi.getCountyIndex();
-		Slot tempSlot = null;
-		int totalSlotCapacity = 0;
+		BlockOfDays tempBlockOfDays = null;
 		
 		for (int i = 0; i < fullInfo.size(); ++i) {
 			
 			if (fullInfo.get(i).getMustCounty().equals("all")) {
 				if (! isSlotStart) {
-					tempSlot = new Slot();
-					tempSlot.firstCounty = tempCounty;
-					tempSlot.days.add(i);
+					tempBlockOfDays = new BlockOfDays();
+					tempBlockOfDays.type = "slot";
+					tempBlockOfDays.days.add(i);
 					
-					isSlotStart  = true;
+					isSlotStart = true;
 				} else
-					tempSlot.days.add(i);
+					tempBlockOfDays.days.add(i);
 				
-				++totalSlotCapacity;
 			} else {
 				if (isSlotStart) {
-					tempSlot.lastCounty = fullInfo.get(i).getMustCountyIndex();
-					slotList.add(tempSlot);
+					blockOfDaysList.add(tempBlockOfDays);
 					
 					isSlotStart = false;
 				}
-				tempCounty = fullInfo.get(i).getMustCountyIndex();
+				
+				tempBlockOfDays = new BlockOfDays();
+				tempBlockOfDays.type = "mustCounty";
+				tempBlockOfDays.days.add(i);
+				tempBlockOfDays.mustCounty = fullInfo.get(i).getMustCountyIndex();
+				
+				blockOfDaysList.add(tempBlockOfDays);
 			}
 		}
 		if (isSlotStart) {
-			tempSlot.lastCounty = itineraryEndPoi.getCountyIndex();
-			slotList.add(tempSlot);
+			blockOfDaysList.add(tempBlockOfDays);
 		}
 		
-		// put in slot data: feasible county
-		for (int i = 0; i < slotList.size(); ++i) {
-			// feasible county
-			slotList.get(i).feasibleCounty.add( slotList.get(i).firstCounty );
-			slotList.get(i).feasibleCounty.add( slotList.get(i).lastCounty );
-			List<Integer> intermediateCounty = County.getIntermediateCounty(slotList.get(i).firstCounty, slotList.get(i).lastCounty);
-			for (Integer j : intermediateCounty)
-				slotList.get(i).feasibleCounty.add(j);
+//		// display blockOfDaysList
+//		for (int i = 0; i < blockOfDaysList.size(); ++i) {
+//			System.out.println("blockOfDaysList " + i);
+//			System.out.println(blockOfDaysList.get(i));
+//		}
+		
+		// put in feasible county for type="slot" blockOfDays
+		List<Integer> slotIndexInBlocks = new ArrayList<Integer>();
+		int totalSlotCapacity = 0;
+		
+		for (int b = 0; b < blockOfDaysList.size(); ++b) {
+			if (blockOfDaysList.get(b).type.equals("slot")) {
+				slotIndexInBlocks.add(b);
+				totalSlotCapacity += blockOfDaysList.get(b).days.size();
+				
+				BlockOfDays slot = blockOfDaysList.get(b);
+				int firstCounty = (b == 0) ? itineraryStartPoi.getCountyIndex() : blockOfDaysList.get(b - 1).mustCounty;
+				int lastCounty = (b == blockOfDaysList.size() - 1) ? itineraryEndPoi.getCountyIndex() : blockOfDaysList.get(b + 1).mustCounty;
+				
+				slot.feasibleCounty.add(firstCounty);
+				slot.feasibleCounty.add(lastCounty);
+				List<Integer> intermediateCounty = County.getIntermediateCounty(firstCounty, lastCounty);
+				for (Integer j : intermediateCounty)
+					slot.feasibleCounty.add(j);
+			}
 		}
 		
-		// display slot list
-		System.out.println("slotList");
-		for (int i = 0; i < slotList.size(); ++i) {
-			System.out.print(i + "\n");
-			System.out.println(slotList.get(i));
-		}
+		// display blockOfDaysList
+//		for (int i = 0; i < blockOfDaysList.size(); ++i) {
+//			System.out.println("\n" + "blockOfDaysList " + i);
+//			System.out.println(blockOfDaysList.get(i));
+//		}
+		
 		
 		// assign clusters to slots
-		if (clusterList.size() > 0) {
+		int[] numAssignedCluster = new int[slotIndexInBlocks.size()];
+		
+		if (clusterList.size() > 0) { //implies slotIndexInBlocks.size() > 0
 			
-			if (slotList.size() == 1) {
-				slotList.get(0).assignedClusters.addAll( clusterList );
+			if (slotIndexInBlocks.size() == 1) {
+				BlockOfDays slot = blockOfDaysList.get( slotIndexInBlocks.get(0) );
 				
-				for (Cluster cluster : clusterList) {
-					cluster.score = DistanceAndTimeEstimation.getShortestTime_BetweenCounties(cluster.poiList, slotList.get(0).feasibleCounty);
+				for (int i = 0; i < clusterList.size(); ++i) { // clusterList.size() <= slot.days.size()
+					Cluster cluster = clusterList.get(i);
+					cluster.score = DistanceAndTime.getShortestTime_BetweenCounties(cluster.poiList, slot.feasibleCounty);
+					fullCluster[ slot.days.get(i) ] = cluster;
+					++numAssignedCluster[0];
 				}
 				
-			} else { // slotList.size() should > 1
+			} else { // slotIndexInBlocks.size() should > 1
 				
 				// create assignment cost matrix
 				double[][] assignmentCostMatrix = new double[ clusterList.size() ][ totalSlotCapacity ];
 				int[] slotIndex = new int[ totalSlotCapacity ];
+				
 				for (int i = 0; i < clusterList.size(); ++i) {
-					int k = 0;
-					for (int s = 0; s < slotList.size(); ++s) {
-						double cost = DistanceAndTimeEstimation.getShortestTime_BetweenCounties(clusterList.get(i).poiList, slotList.get(s).feasibleCounty);
+					int col = 0;
+					for (int s = 0; s < slotIndexInBlocks.size(); ++s) {
+						BlockOfDays slot = blockOfDaysList.get( slotIndexInBlocks.get(s) );
+						double cost = DistanceAndTime.getShortestTime_BetweenCounties(clusterList.get(i).poiList, slot.feasibleCounty);
 						
-						for (int j = 0; j < slotList.get(s).getNumDays(); ++j) {
-							assignmentCostMatrix[i][k] = cost;
-							slotIndex[k++] = s;
+						for (int k = 0; k < slot.getNumDays(); ++k) {
+							assignmentCostMatrix[i][col] = cost;
+							slotIndex[col++] = s;
 						}
 					}
 				}
 				HungarianAlgorithm hungarianAlgorithm = new HungarianAlgorithm(assignmentCostMatrix);
-				int[] result = hungarianAlgorithm.execute();
-//				for (int i = 0; i < result.length; ++i)
-//					System.out.println("cluster " + i + " in slot " + slotIndex[result[i]]);
-//				System.out.println();
+				int[] result = hungarianAlgorithm.execute(); //size = clusterList.size()
 				
 				// move clusters into slots
 				for (int i = 0; i < result.length; ++i) {
-					clusterList.get(i).score = assignmentCostMatrix[i][result[i]];					
-					slotList.get( slotIndex[result[i]] ).assignedClusters.add( clusterList.get(i) );
+					clusterList.get(i).score = assignmentCostMatrix[i][result[i]];
+					int s = slotIndex[result[i]];
+					
+					fullCluster[ blockOfDaysList.get( slotIndexInBlocks.get( s ) ).days.get( numAssignedCluster[ s ] ) ] = clusterList.get(i);
+					++numAssignedCluster[ s ];
 				}
 			}
-			clusterList.clear();
 			
-			// display slot list
-			System.out.println("slotList");
-			for (int i = 0; i < slotList.size(); ++i) {
-				System.out.print(i + "\n");
-				System.out.println(slotList.get(i));
-			}
 		}
 		
-		// in each slot, fill in additional clusters if there is a shortage 
-		for (Slot slot : slotList) {
-			int numAdditionalClusters = slot.getNumDays() - slot.getNumAssignedClusters();
+		// display fullCluster
+//		System.out.println("\n" + "fullCluster --- 2/5 --- finish assigning remaining clusters into slots");
+//		for (int i = 0; i < fullCluster.length; ++i) {
+//			System.out.println(i);
+//			System.out.println(fullCluster[i]);
+//			System.out.println();
+//		}
+		
+		// in each slot, fill in additional clusters if there is a shortage
+		for (int s = 0; s < slotIndexInBlocks.size(); ++s) {
+			int b = slotIndexInBlocks.get(s);
+			BlockOfDays slot = blockOfDaysList.get(b);
+			
+			int numAdditionalClusters = slot.getNumDays() - numAssignedCluster[s];
 			
 			if (numAdditionalClusters > 0) {
-				List<Poi> poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
-						numAdditionalClusters, slot.feasibleCounty , "free", looseType);
-				for(Poi poi : poiList) {
-					Cluster cluster = new Cluster();
-					cluster.poiList.add(poi);
-					cluster.score = 0; //selected inside the counties
-					slot.assignedClusters.add(cluster);
-				}
-			}
-		}
-		
-		// in each slot, arrange the clusters and put poiList into fullInfo
-		for (Slot slot : slotList) {
-			
-			// arrange the clusters
-			if (slot.getNumDays() > 1) {
-				for (Cluster cluster : slot.assignedClusters) {
-					if (slot.firstCounty != slot.lastCounty) {
-						
-						double scoreToFirst = DistanceAndTimeEstimation.getShortestTime_BetweenCounties(cluster.poiList, slot.firstCounty);
-						if (cluster.score == 0) {
-							cluster.score = scoreToFirst;
-							
-						} else {
-							double scoreToLast = DistanceAndTimeEstimation.getShortestTime_BetweenCounties(cluster.poiList, slot.lastCounty);
-							if (scoreToFirst <= scoreToLast)
-								cluster.score = - scoreToFirst;
-							else
-								cluster.score = scoreToFirst;
+				
+				// decide candidate counties
+				Set<Integer> candidateCounty = null;
+				if ( (slot.feasibleCounty.size() == 1 && numAdditionalClusters >= 3)
+					|| (slot.feasibleCounty.size() == 2 && numAdditionalClusters >= 4) ) {
+					
+					int firstCounty = (b == 0) ? itineraryStartPoi.getCountyIndex() : blockOfDaysList.get(b - 1).mustCounty;
+					
+					candidateCounty = County.getCandidateCounty(firstCounty, numAdditionalClusters);
+
+					for (Integer j : mustCountyInfo.daysMapping.keySet()) {
+						if (candidateCounty.contains(j))
+							candidateCounty.remove(j);
+					}
+					candidateCounty.addAll(slot.feasibleCounty);
+				} else
+					candidateCounty = slot.feasibleCounty;
+				
+				// select POI
+				List<Poi> poiList;
+				boolean isDuplicatedPoi;
+				do {
+					queryDatabase.display("-get enough POI in a slot");
+					poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
+							numAdditionalClusters, candidateCounty, "free", looseType); // note: not force "allOpen" here, so open days have to be checked in stage 2
+					isDuplicatedPoi = false;
+					for (Poi poi : poiList) {
+						if (poiIdRepository.contains(poi.getPoiId())) {
+							isDuplicatedPoi = true;
+							break;
 						}
 					}
-				}
-//				System.out.println("before:");
-//				System.out.println("slot.assignedClusters");
-//				for (int i = 0; i < slot.assignedClusters.size(); ++i) {
-//					System.out.println(i + "\n" + slot.assignedClusters.get(i));
-//				}
-
-				Comparator<Cluster> comparator = new ClusterComparator();
-				Collections.sort(slot.assignedClusters, comparator);
+				} while (isDuplicatedPoi);
 				
-//				System.out.println("after");
-//				System.out.println("slot.assignedClusters");
-//				for (int i = 0; i < slot.assignedClusters.size(); ++i) {
-//					System.out.println(i + "\n" + slot.assignedClusters.get(i));
-//				}
+				for (int i = 0; i < numAdditionalClusters; ++i) {
+					Cluster cluster = new Cluster();
+					cluster.poiList.add(poiList.get(i));
+					cluster.centerPoi = poiList.get(i);
+					cluster.score = 0; //selected inside the counties
+					fullCluster[ slot.days.get(numAssignedCluster[s] + i) ] = cluster;
+					
+					// update repository
+					poiIdRepository.add( poiList.get(i).getPoiId() );
+				}
+			}
+		}
+		
+		// display fullCluster
+//		System.out.println("\n" + "fullCluster --- 3/5 --- finish filling in clusters into all days");
+//		for (int i = 0; i < fullCluster.length; ++i) {
+//			System.out.println(i);
+//			System.out.println(fullCluster[i]);
+//			System.out.println();
+//		}
+		
+		
+		// in each slot, arrange the clusters
+		for (int s = 0; s < slotIndexInBlocks.size(); ++s) {
+			int b = slotIndexInBlocks.get(s);
+			BlockOfDays slot = blockOfDaysList.get(b);
+			
+			if (slot.getNumDays() > 1) {
+				// rawPoiList, resultPoiList, poiIdList, daysOfSlot, clusterBackup
+				List<Poi> rawPoiList = new ArrayList<Poi>();
+				List<Poi> resultPoiList = new ArrayList<Poi>();
+				List<Poi> completePoiList = new ArrayList<Poi>();
+				
+				int[] daysOfSlot = new int[slot.getNumDays()];
+				Cluster[] clusterBackup = new Cluster[slot.getNumDays()];
+				
+				// start POI
+				Poi firstPoi = (b == 0) ? itineraryStartPoi : fullCluster[ blockOfDaysList.get(b - 1).days.get(0) ].centerPoi;
+				firstPoi.setIndex(0);
+				resultPoiList.add( firstPoi );
+				completePoiList.add( firstPoi );
+				
+				// main POI
+				for (int i = 0; i < slot.getNumDays(); ++i) {
+					daysOfSlot[i] = slot.days.get(i);
+					clusterBackup[i] = fullCluster[daysOfSlot[i]];
+					
+					Poi poi = fullCluster[daysOfSlot[i]].centerPoi;
+					poi.setIndex(i + 1);
+					rawPoiList.add(poi);
+					completePoiList.add(poi);
+				}
+				
+				// end POI
+				Poi lastPoi = (b == blockOfDaysList.size() - 1) ? itineraryEndPoi : fullCluster[ blockOfDaysList.get(b + 1).days.get(0) ].centerPoi;
+				lastPoi.setIndex( slot.getNumDays() + 1 ); //When lastPoi==firstPoi, index is updated. But should not matter.  
+				resultPoiList.add( lastPoi );
+				completePoiList.add( lastPoi );
+				
+				// get distance and time matrix
+//				double[][] distance = new double[ poiIdList.size() ][ poiIdList.size() ];
+				int[][] time = new int[ completePoiList.size() ][ completePoiList.size() ];
+				queryDatabase.display("-get distance/time matrix in a slot");
+				queryDatabase.getDistanceAndTimeMatrix( completePoiList, null, time );
+//				Display.print_2D_Array(distance, "distance");
+//				Display.print_2D_Array(time, "time");
+				
+				// insertion heuristic
+				runInsertionHeuristic_WithoutFeasibilityCheck(rawPoiList, resultPoiList, time);
+				
+				// re-assign clusters
+				for (int i = 1; i < resultPoiList.size() - 1; ++i) {
+					fullCluster[ daysOfSlot[i - 1] ] = clusterBackup[ resultPoiList.get(i).getIndex() - 1 ];
+				}
+			}
+		}
+		
+		// display fullCluster
+//		System.out.println("\n" + "fullCluster --- 4/5 --- finish rearranging clusters within slots");
+//		for (int i = 0; i < fullCluster.length; ++i) {
+//			System.out.println(i);
+//			System.out.println(fullCluster[i]);
+//			System.out.println();
+//		}
+		
+		// re-arrange clusters in consecutive days which have the same must county
+		List<List<Integer>> allConsecutiveDays = mustCountyInfo.getConsecutiveDays();
+		// display
+//		System.out.println("\n" + "consecutive days:\n");
+//		for (List<Integer> days : allConsecutiveDays) {
+//			for (Integer i : days) {
+//				System.out.print(i + " ");
+//			}
+//			System.out.println();
+//		}
+//		System.out.println();
+		
+		for (List<Integer> days : allConsecutiveDays) {
+			// rawPoiList, resultPoiList, poiIdList, clusterBackup
+			List<Poi> rawPoiList = new ArrayList<Poi>();
+			List<Poi> resultPoiList = new ArrayList<Poi>();
+			List<Poi> completePoiList = new ArrayList<Poi>();
+			
+			Cluster[] clusterBackup = new Cluster[days.size()];
+			
+			// start POI
+			Poi firstPoi = (days.get(0) == 0) ? itineraryStartPoi : fullCluster[ days.get(0) - 1 ].centerPoi;
+			firstPoi.setIndex(0);
+			resultPoiList.add( firstPoi );
+			completePoiList.add( firstPoi );
+			
+			// main POI
+			for (int i = 0; i < days.size(); ++i) {
+				clusterBackup[i] = fullCluster[days.get(i)];
+				
+				Poi poi = fullCluster[days.get(i)].centerPoi;
+				poi.setIndex(i + 1);
+				rawPoiList.add(poi);
+				completePoiList.add(poi);
 			}
 			
-			// put poiList into fullInfo
-			for (int i = 0; i < slot.getNumDays(); ++i) {
-				fullInfo.get( slot.days.get(i) ).getPoiList().addAll( slot.assignedClusters.get(i).poiList );
+			// end POI
+			Poi lastPoi = (days.get(days.size()-1) == numDay - 1) ? itineraryEndPoi : fullCluster[ days.get(days.size()-1) + 1 ].centerPoi;
+			lastPoi.setIndex( days.size() + 1 ); //When lastPoi==firstPoi, index is updated. But should not matter.  
+			resultPoiList.add( lastPoi );
+			completePoiList.add( lastPoi );
+			
+			// get distance and time matrix
+//			double[][] distance = new double[ poiIdList.size() ][ poiIdList.size() ];
+			int[][] time = new int[ completePoiList.size() ][ completePoiList.size() ];
+			queryDatabase.display("-get distance/time matrix for re-arranging clusters in consecutive days which have the same must county");
+			queryDatabase.getDistanceAndTimeMatrix( completePoiList, null, time );
+//			Display.print_2D_Array(distance, "distance");
+//			Display.print_2D_Array(time, "time");
+			
+			// insertion heuristic
+			runInsertionHeuristic_WithoutFeasibilityCheck(rawPoiList, resultPoiList, time);
+			
+			// re-assign clusters
+			for (int i = 1; i < resultPoiList.size() - 1; ++i) {
+				fullCluster[ days.get(i-1) ] = clusterBackup[ resultPoiList.get(i).getIndex() - 1 ];
 			}
+
 		}
 		
+		
+		// display fullCluster
+		System.out.println("\n" + "fullCluster --- 5/5 --- finish rearranging clusters in consecutive days which have the same must county");
+		for (int i = 0; i < fullCluster.length; ++i) {
+			System.out.println(i);
+			System.out.println(fullCluster[i]);
+			System.out.println();
+		}
+		
+		// display number of poiList in each day
+		System.out.println("\n" + "count of POI in stage 1");
 		for (int i = 0; i < numDay; ++i) {
-			System.out.println("day " + i + " " + fullInfo.get(i).getPoiList().size());
+			System.out.println("day " + i + " " + fullCluster[i].poiList.size());
 		}
+		System.out.println();
 		
-		//------------------------------------------
-		// stage 2: generate complete itinerary
-		//------------------------------------------
+		//======================================================
+		//    Stage 2: Daily Planning - complete daily plans
+		//======================================================
+		
 		// complete itinerary
 		for (int i = 0; i < numDay; ++i) {
 			DailyInfo dailyInfo = fullInfo.get(i);
+			List<Poi> poiList = fullCluster[i].poiList;
 			
-			// check if POI in this day are ALL CLOSE
-			double[] originalCenteredPoi = null;
-			Iterator<Poi> iterator = dailyInfo.getPoiList().iterator();
+			// check if POI in this day are close. if close, remove it.
+			Iterator<Poi> iterator = poiList.iterator();
 			while (iterator.hasNext()) {
 				Poi poi = iterator.next();
 				
 				String openHoursOfThisDay = poi.getOpenHoursOfADay(dailyInfo.getDayOfWeek());
 				if  (openHoursOfThisDay != null && openHoursOfThisDay.equals("close")) {
-					
-					if (originalCenteredPoi == null)
-						originalCenteredPoi = Poi.calculatePoiCenter( dailyInfo.getPoiList() );
-					
 					iterator.remove();
-				}	
-			}
-			// if ALL CLOSE, get a new center POI which is open
-			if (dailyInfo.getPoiList().isEmpty()) {
-				queryDatabase.display("-when all Poi in this day are close, get centered poiId");
-				
-				String centerPoiId = queryDatabase.getNearbyPoiIdByCoordinate( originalCenteredPoi );
-				
-				double distanceLB = 0;
-				double distanceUB = 0.3;
-				double distanceUBIncrement = 0.3;
-				
-				Set<Integer> counties = new HashSet<Integer>();
-				
-				if (! dailyInfo.getMustCounty().equals("all")) {
-					counties.add( Integer.parseInt( dailyInfo.getMustCounty().replaceAll("[^0-9]", "")) );
-					distanceUB = 5;
-					distanceUBIncrement = 5;
 				}
-				queryDatabase.display("-get random Poi in radius of centered poiId");
-				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
-						1, 1, centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
-						counties, dailyInfo.getDayOfWeek(), "RAND()", looseType);
-				if (foundPoiList.size() == 1)
-					dailyInfo.getPoiList().add( foundPoiList.get(0) );
-				else
-					;
 			}
 			
-			if (dailyInfo.getStartPoi() == null) {
-				System.err.println("Oooooh, shouldn't happen!!");
-				return null;
-			}
-			if (dailyInfo.getEndPoi() == null) { //won't be the last day
-				queryDatabase.display("-get centered Poi by Poi List. use next day's Poi to guide this day's direction");
-				Poi tempPoi = queryDatabase.getCenteredPoiByPoiList( fullInfo.get(i+1).getPoiList(), looseType );
-				dailyInfo.setEndPoi( tempPoi );
+			if (i < numDay - 1) { //not the last day
+				dailyInfo.setEndPoi( fullCluster[i + 1].centerPoi );
+				dailyInfo.setTravelToEndPoi(false);
+				dailyInfo.setEndPoiUseStayTime(false);
 			}
 			
-			List<Poi> poiList = dailyInfo.getPoiList();
 			System.out.println("--- Day " + (i+1) + " --- before adding candidate POIs:");
 			for (Poi poi : poiList)
 				System.out.println(poi);
 			
-			int numCandidatePoi = Math.max(numPoiForSelectionUpperBound - dailyInfo.getPoiList().size(), 0);
+			//---------------------------------------------------
+			//    get candidate POI information from database
+			//---------------------------------------------------
+			// get counties used for searching POI
+			Set<Integer> countiesForSearch = new HashSet<Integer>();
+			if (dailyInfo.getMustCounty().equals("all")) {
+				for (Poi poi : poiList) {
+					int j = poi.getCountyIndex();
+					countiesForSearch.add(j);
+					
+					List<Integer> nearbyCounty = County.getNearbyCounty(j);
+					countiesForSearch.addAll(nearbyCounty);
+				}
+			} else {
+				countiesForSearch.add( dailyInfo.getMustCountyIndex() );
+			}
+			
+			int numCandidatePoi = Math.max(numPoiForSelectionUpperBound - poiList.size(), 0);
 			
 			if (numCandidatePoi > 0) {
-				
-				// get counties used for searching POI
-				Set<Integer> countiesForSearch = new HashSet<Integer>();
-				if (dailyInfo.getMustCounty().equals("all")) {
-					for (Poi poi : poiList) {
-						int j = poi.getCountyIndex();
-						countiesForSearch.add(j);
-						
-						List<Integer> nearbyCounty = County.getNearbyCounty(j);
-						countiesForSearch.addAll(nearbyCounty);
-					}
-				} else {
-					countiesForSearch.add( dailyInfo.getMustCountyIndex() );
+				// if the only one POI is a must-POI which is from ST_V3_ZH_TW.PoiFinalView2, then need another centerPoi for searching candidates
+				if (fullCluster[i].poiList.size() == 1 && fullCluster[i].poiList.get(0).getDatabaseSource() == 1) {
+					queryDatabase.display("-get alternative center POI");
+					double[] tempCoordinate = Poi.parseCoordinate( fullCluster[i].poiList.get(0).getLocation() );
+					fullCluster[i].centerPoi = queryDatabase.getNearbyPoiByCoordinate( tempCoordinate[0], tempCoordinate[1], false, looseType );
 				}
 				
-				queryDatabase.display("-get centered poiId. use to select candidate Poi");
-				String centerPoiId = queryDatabase.getCenteredPoiIdByPoiList(poiList);
-				
 				//select candidate POIs from database
-				int numSelectionLB = 30;
-				int numSelectionUB = 50;
-				double distanceLB = 0;
-				double distanceUB = 15;
-				double distanceUBIncrement = 5;
-				queryDatabase.display("-get candidate Poi");
-				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
-						numSelectionLB, numSelectionUB, centerPoiId, distanceLB, distanceUB, distanceUBIncrement,
+				int numSelectionLB = 10;
+				int numSelectionUB = 30;
+				int timeLB = 0;
+				int timeUB = 30;
+				int timeUBIncrement = 15;
+				
+				List<Poi> foundPoiList;
+				
+				queryDatabase.display("-get candidate POI");
+				foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
+						numSelectionLB, numSelectionUB, fullCluster[i].centerPoi.getPoiId(), timeLB, timeUB, timeUBIncrement,
 						countiesForSearch, dailyInfo.getDayOfWeek(), "checkinTotal DESC", looseType);
+				Iterator<Poi> foundPoiIterator = foundPoiList.iterator();
+				while (foundPoiIterator.hasNext()) {
+					Poi poi = foundPoiIterator.next();
+					if  (poiIdRepository.contains(poi.getPoiId())) {
+						foundPoiIterator.remove();
+					}
+				}
 				
 				// select #=numCandidatePoi from foundPoiList by probability/scores
 				double[] scores = Poi.calculateScores(foundPoiList, userInputTheme);
@@ -734,7 +881,6 @@ public class Scheduling2 {
 				for (Integer j : selectedIndex) {
 					poiList.add( foundPoiList.get(j) );
 				}
-				//NOTE: for non-must POI already in poiList ..
 			}
 			
 			System.out.println("--- Day " + (i+1) + " --- after adding candidate POIs:");
@@ -750,32 +896,21 @@ public class Scheduling2 {
 			dailyInfo.getEndPoi().setIndex(poiList.size() + 1);
 			
 			// obtain distance and travel time
-			List<String> augmentedPoiIdList = new ArrayList<String>();
+			List<Poi> completePoiList = new ArrayList<Poi>();
+			completePoiList.add( dailyInfo.getStartPoi() );
+			completePoiList.addAll(poiList);
+			completePoiList.add( dailyInfo.getEndPoi() );
 			
-			augmentedPoiIdList.add( dailyInfo.getStartPoi().getPoiId() );
-			for (Poi poi : poiList)
-				augmentedPoiIdList.add( poi.getPoiId() );
-			augmentedPoiIdList.add( dailyInfo.getEndPoi().getPoiId() );
+			double[][] distance = new double[ completePoiList.size() ][ completePoiList.size() ]; // = poiList.size() + 2
+			int[][] travelTime = new int[ completePoiList.size() ][ completePoiList.size() ];
+			queryDatabase.display("-get distance/time matrix of selected POI in a day");
+			queryDatabase.getDistanceAndTimeMatrix( completePoiList, distance, travelTime );
+//			Display.print_2D_Array(distance, "distance");
+			Display.print_2D_Array(travelTime, "travelTime");
 			
-			double[][] distance = new double[ augmentedPoiIdList.size() ][ augmentedPoiIdList.size() ]; // = poiList.size() + 2
-			int[][] time = new int[ augmentedPoiIdList.size() ][ augmentedPoiIdList.size() ];
-			queryDatabase.getDistanceAndTimeMatrix( augmentedPoiIdList, distance, null );
-			Display.print_2D_Array(distance, "distance");
-			Display.print_2D_Array(time, "time");
-			
-			// temp...
-			int[][] travelTime = new int[poiList.size() + 2][poiList.size() + 2];
-			for (int j = 0; j < poiList.size() + 2; ++j)
-				for (int k = 0; k < poiList.size() + 2; ++k)
-						travelTime[j][k] = getTimeFromDistance( distance[j][k] );
-			Display.print_2D_Array(travelTime, "Display travelTime");
-			
-			
-			double[] poiScore = new double[poiList.size()];
-			
-			//-----------------------------------------
-			//  construct tour by insertion heuristic
-			//-----------------------------------------
+			//---------------------------------------------
+			//    construct tour by insertion heuristic
+			//---------------------------------------------
 			List<Poi> rawMustPoiList = new ArrayList<Poi>();
 			List<Poi> rawOtherPoiList = new ArrayList<Poi>();
 			for (Poi poi : poiList) {
@@ -785,13 +920,12 @@ public class Scheduling2 {
 					rawOtherPoiList.add(poi);
 			}
 			
-			List<Poi> resultPoiList = new ArrayList<Poi>();
-			resultPoiList.add( dailyInfo.getStartPoi() );
-			resultPoiList.add( dailyInfo.getEndPoi() );
+			List<Poi> itineraryPoi = new ArrayList<Poi>();
+			itineraryPoi.add( dailyInfo.getStartPoi() );
+			itineraryPoi.add( dailyInfo.getEndPoi() );
 			
 			
 			// if must county - get the first POI in must county
-			
 			String mustCounty = dailyInfo.getMustCounty();
 			if (! mustCounty.equals("all")) {
 				
@@ -807,7 +941,7 @@ public class Scheduling2 {
 					for (int k = 0; k < rawPoiList.size(); ++k) {
 						if (! rawPoiList.get(k).getCountyId().equals( mustCounty ))
 							continue;
-						int thisTime = Poi.findShortestTimeFromPoiToPoiList( rawPoiList.get(k), resultPoiList, travelTime);
+						int thisTime = Poi.findShortestTimeFromPoiToPoiList( rawPoiList.get(k), itineraryPoi, travelTime);
 						if (thisTime < shortestTime) {
 							shortestTime = thisTime;
 							bestIndex = k;
@@ -821,13 +955,12 @@ public class Scheduling2 {
 					System.err.println("In day " + i + ", no POI in must county!");
 					return null;
 				} else {
-					resultPoiList.add( 1, rawPoiList.get(bestIndex) );
+					itineraryPoi.add( 1, rawPoiList.get(bestIndex) );
 					rawPoiList.remove( bestIndex );
 				}
 			}
 			
-			// complete the insertion heuristic
-			
+			// complete the insertion heuristic "with feasibility check"
 			for (int j = 0; j < 2; ++j) {
 				List<Poi> rawPoiList = (j == 0) ? rawMustPoiList : rawOtherPoiList;
 				
@@ -838,7 +971,7 @@ public class Scheduling2 {
 					int shortestTime = Integer.MAX_VALUE;
 					int bestIndex = -1;
 					for (int k = 0; k < rawPoiList.size(); ++k) {
-						int thisTime = Poi.findShortestTimeFromPoiToPoiList( rawPoiList.get(k), resultPoiList, travelTime);
+						int thisTime = Poi.findShortestTimeFromPoiToPoiList( rawPoiList.get(k), itineraryPoi, travelTime);
 						if (thisTime < shortestTime) {
 							shortestTime = thisTime;
 							bestIndex = k;
@@ -852,15 +985,15 @@ public class Scheduling2 {
 					int smallestTimeIncrementWhenFeasible = Integer.MAX_VALUE;
 					int bestSlotIndexWhenFeasible = -1;
 					
-					for (int k = 0; k < resultPoiList.size() - 1; ++k) {
-						int timeIncrement = travelTime[ resultPoiList.get(k).getIndex() ][ rawPoiList.get(bestIndex).getIndex() ]
-								+ travelTime[ rawPoiList.get(bestIndex).getIndex() ][ resultPoiList.get(k+1).getIndex() ]
-								- travelTime[ resultPoiList.get(k).getIndex() ][ resultPoiList.get(k+1).getIndex() ];
+					for (int k = 0; k < itineraryPoi.size() - 1; ++k) {
+						int timeIncrement = travelTime[ itineraryPoi.get(k).getIndex() ][ rawPoiList.get(bestIndex).getIndex() ]
+								+ travelTime[ rawPoiList.get(bestIndex).getIndex() ][ itineraryPoi.get(k+1).getIndex() ]
+								- travelTime[ itineraryPoi.get(k).getIndex() ][ itineraryPoi.get(k+1).getIndex() ];
 						
 						List<Poi> tempPoiList = new ArrayList<Poi>();
-						tempPoiList.addAll( resultPoiList.subList(0, k+1) );
+						tempPoiList.addAll( itineraryPoi.subList(0, k+1) );
 						tempPoiList.add( rawPoiList.get(bestIndex) );
-						tempPoiList.addAll( resultPoiList.subList(k+1, resultPoiList.size()) );
+						tempPoiList.addAll( itineraryPoi.subList(k+1, itineraryPoi.size()) );
 						boolean isFeasible = Poi.checkOpenHoursFeasibility(tempPoiList, travelTime, dailyInfo, earlistLunchTimeInMinutes, minutesForLunch);
 						
 						if (timeIncrement < smallestTimeIncrement) {
@@ -878,33 +1011,180 @@ public class Scheduling2 {
 					if (bestSlotIndexWhenFeasible == bestSlotIndex
 							|| smallestTimeIncrementWhenFeasible <= 30
 							|| smallestTimeIncrementWhenFeasible <= smallestTimeIncrement * 1.5) { //to be tuned
-						resultPoiList.add( bestSlotIndexWhenFeasible + 1, rawPoiList.get(bestIndex) );
+						itineraryPoi.add( bestSlotIndexWhenFeasible + 1, rawPoiList.get(bestIndex) );
 					}
 					rawPoiList.remove(bestIndex);
 				}
 				
 			}
 			
-			List<TourEvent> itinerary = Poi.getTimeInfoFromFeasibleSequence(resultPoiList, travelTime, dailyInfo, earlistLunchTimeInMinutes, minutesForLunch);
+			List<TourEvent> itinerary = new ArrayList<TourEvent>();
+			int minutesLeft = Poi.getItineraryFromFeasibleSequence(itineraryPoi, travelTime, dailyInfo, earlistLunchTimeInMinutes, minutesForLunch, itinerary);
 			
-			// handle if last/first POI will be used
-			if (i < numDay - 1 && ! dailyInfo.isEndPoiUseStayTime()) {
-				resultPoiList.remove( resultPoiList.size() - 1 );
-				itinerary.remove( itinerary.size() - 1 );
+			// update repository
+			for (int j = 1; j < itinerary.size() - 1; ++j)
+				poiIdRepository.add( itinerary.get(j).getPoiId() );
+			
+			//----------------------------------------------------------------
+			//    select and fill in more POI if there is enough time left
+			//----------------------------------------------------------------
+			int minutesLeftThreshold = 45;
+			if (looseType == 1)
+				minutesLeftThreshold = (int)(1.2 * minutesLeftThreshold);
+			else if (looseType == -1)
+				minutesLeftThreshold = (int)(0.8 * minutesLeftThreshold);
+			
+			
+			// when there are some minutes left in the end of the day, try to add more POI
+			if (minutesLeft >= minutesLeftThreshold) {
+				
+				String centerPoiId = itinerary.get(itinerary.size() - 2).getPoiId();
+				int numSelectionLB = 1;
+				int numSelectionUB = 5;
+				int timeLB = 0;
+				int timeUB = 15;
+				int timeUBIncrement = 0;
+				
+				// get extra POI
+				queryDatabase.display("-get extra POI if there are minutes left in the end of the day");
+				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
+						numSelectionLB, numSelectionUB, centerPoiId, timeLB, timeUB, timeUBIncrement,
+						countiesForSearch, dailyInfo.getDayOfWeek(), "RAND()", looseType);
+				
+				Iterator<Poi> foundPoiIterator = foundPoiList.iterator();
+				while (foundPoiIterator.hasNext()) {
+					Poi poi = foundPoiIterator.next();
+					if  (poiIdRepository.contains(poi.getPoiId())) {
+						foundPoiIterator.remove();
+					}
+				}
+				
+				// get time matrix
+				List<Poi> completeDayEndPoiList = new ArrayList<Poi>();
+				completeDayEndPoiList.add( itineraryPoi.get(itineraryPoi.size() - 2) );
+				completeDayEndPoiList.addAll( foundPoiList );
+				completeDayEndPoiList.add( itineraryPoi.get(itineraryPoi.size() - 1) );
+				
+				double[][] dayEndDistance = new double[ completeDayEndPoiList.size() ][ completeDayEndPoiList.size() ];
+				int[][] dayEndTravelTime = new int [ completeDayEndPoiList.size() ][ completeDayEndPoiList.size() ];
+				queryDatabase.display("-get distance/time matrix for day-end extra POI");
+				queryDatabase.getDistanceAndTimeMatrix( completeDayEndPoiList, dayEndDistance, dayEndTravelTime );
+//				Display.print_2D_Array(dayEndDistance, "dayEndDistance");
+//				Display.print_2D_Array(dayEndTravelTime, "dayEndTravelTime");
+				
+				boolean[] isAvailable = new boolean[completeDayEndPoiList.size()];
+				Arrays.fill(isAvailable, true);
+				isAvailable[0] = false;
+				isAvailable[isAvailable.length - 1] = false;
+				
+				//
+				int currentIndex = 0;
+				do {
+					System.out.println("In the end-day POI adding loop. minutesLeft = " + minutesLeft);
+					
+					// calculate time pointer to start with
+					Calendar calendar = Calendar.getInstance();
+					calendar.setTime(itinerary.get(itinerary.size() - 2).getEndTime());
+					int timePointer = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
+					
+					// select the POI which might be finished in the earliest time
+					int minTimeMeasure = Integer.MAX_VALUE;
+					int bestIndex = -1;
+					for (int k = 1; k <= foundPoiList.size(); ++k) {
+						if (isAvailable[k]) {
+							int measure = dayEndTravelTime[ currentIndex ][ k ] + foundPoiList.get( k - 1 ).getStayTime();
+							if ( measure < minTimeMeasure) {
+								minTimeMeasure = measure;
+								bestIndex = k;
+							}
+						}
+					}
+					
+					//(1) all found POI are unavailable (2) all found POI cannot be feasible, then done
+					if (bestIndex == -1 || timePointer + minTimeMeasure > dailyInfo.getEndTimeInMinutes()) {
+						break;
+					}
+					
+					isAvailable[bestIndex] = false; // finish checking this POI. mark unavailable whether this is feasible or not.
+					
+					// now: check the precise open hours
+					timePointer += dayEndTravelTime[ currentIndex ][ bestIndex ];
+					
+					int[] visitDuration = Poi.getEarliestFeasibleVisitDuration(
+							timePointer, foundPoiList.get(bestIndex - 1), dailyInfo.getDayOfWeek());
+					if (visitDuration == null) { //infeasible
+						continue;
+					}
+					
+					timePointer = visitDuration[1];
+					
+					int[] visitDurationLast = new int[]{visitDuration[1], visitDuration[1]}; //temp
+					
+					if (dailyInfo.isTravelToEndPoi()) {
+						timePointer += dayEndTravelTime[ bestIndex ][ completeDayEndPoiList.size() - 1 ];
+						
+						if (! dailyInfo.isEndPoiUseStayTime()) {
+							visitDurationLast[0] = timePointer;
+							visitDurationLast[1] = timePointer;
+							
+						} else {
+							visitDurationLast = Poi.getEarliestFeasibleVisitDuration(
+									timePointer, itineraryPoi.get(itineraryPoi.size() - 1), dailyInfo.getDayOfWeek());
+							
+							timePointer = visitDurationLast[1];
+						}
+					}
+					
+					if (timePointer <= dailyInfo.getEndTimeInMinutes()) { // INSERT THIS POI!
+						
+						// insert this POI in itineraryPoi
+						itineraryPoi.add(itineraryPoi.size() - 1, foundPoiList.get(bestIndex - 1));
+						
+						// insert this POI in itinerary
+						itinerary.remove(itinerary.size() - 1);
+						
+						TourEvent tourEvent = Poi.createTourEvent( foundPoiList.get(bestIndex - 1).getPoiId(),
+								dailyInfo.getCalendarThisDayAtMidnight(), visitDuration[0], visitDuration[1] );
+						itinerary.add(tourEvent);
+						
+						TourEvent tourEventLast = Poi.createTourEvent( itineraryPoi.get(itineraryPoi.size() - 1).getPoiId(),
+								dailyInfo.getCalendarThisDayAtMidnight(), visitDurationLast[0], visitDurationLast[1] );
+						itinerary.add(tourEventLast);
+						
+						// others
+						currentIndex = bestIndex;
+						minutesLeft = dailyInfo.getEndTimeInMinutes() - visitDurationLast[1];
+						
+						// update repository
+						poiIdRepository.add(tourEvent.getPoiId());
+					}
+				} while ( minutesLeft >= minutesLeftThreshold );
+
 			}
+			
+			//------------------------------
+			//    final steps in stage 2
+			//------------------------------
+			// handle if first/last POI will be used
 			if (i > 0 && ! dailyInfo.isStartPoiUseStayTime()) {
-				resultPoiList.remove(0);
+				itineraryPoi.remove(0);
 				itinerary.remove(0);
 			}
-			
+			if (i < numDay - 1 && ! dailyInfo.isEndPoiUseStayTime()) {
+				itineraryPoi.remove( itineraryPoi.size() - 1 );
+				itinerary.remove( itinerary.size() - 1 );
+			}
 			// error check here: is it possible that distances are too long and no POI are selected in the result?
 			
 			// link to full itinerary
-			fullItineraryPoi.addAll(resultPoiList);
+			fullItineraryPoi.addAll(itineraryPoi);
 			fullItinerary.addAll(itinerary);
 			
-			if (i < numDay - 1)
-				fullInfo.get(i + 1).setStartPoi( resultPoiList.get( resultPoiList.size() - 1 ) );
+			// set start POI for next day
+			if (i < numDay - 1) {
+				fullInfo.get(i + 1).setStartPoi( itineraryPoi.get( itineraryPoi.size() - 1 ) );
+				fullInfo.get(i + 1).setStartPoiUseStayTime(false);
+			}
 		}
 		
 		
@@ -912,23 +1192,24 @@ public class Scheduling2 {
 		Calendar calendar = Calendar.getInstance();
 		int dayOfWeek0 = -10;
 		int d = 0;
+		System.out.println();
 		for (int i = 0; i < fullItinerary.size(); ++i) {
 			calendar.setTime(fullItinerary.get(i).getStartTime());
 			int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 1;
 			if (dayOfWeek != dayOfWeek0) {
 				++d;
-				System.out.println("Day " + d);
+				System.out.println("Day " + d + " -- " + Display.getStringOf_date(calendar));
 				dayOfWeek0 = dayOfWeek;
 			}
 
-			System.out.println("[" + fullItinerary.get(i).getStartTime() + "][" + fullItinerary.get(i).getEndTime() + "] "
+			System.out.println("[" + Display.getStringOf_time(fullItinerary.get(i).getStartTime()) + " - "
+					+ Display.getStringOf_time(fullItinerary.get(i).getEndTime()) + "] "
 					+ fullItineraryPoi.get(i)
 					+ ( fullItineraryPoi.get(i).getCountyId().equals(fullInfo.get(d-1).getMustCounty()) ? " /必縣/" : "" ));
 		}
 		
-		
 		Date dateSchedulingEnd = new Date(System.currentTimeMillis());
-		System.out.print("Total elapsed:");
+		System.out.print("\nTotal elapsed:");
 		System.out.println(dateSchedulingEnd.getTime() - dateSchedulingStart.getTime());
 		System.out.println("Program end!");
 		return fullItinerary;
@@ -937,24 +1218,24 @@ public class Scheduling2 {
 	//============
 	//    temp
 	//============
-	private int getTimeFromDistance(double d) {
-		if (d < 0) {
-			System.err.println("Negative distance found in getTimeFromDistance()!");
-			return 0;
-		}
-		
-		d = d * 1.3;
-		
-		double velocity;
-		if (d < 0.5)
-			velocity = 8;
-		else
-			velocity = 100.0 * (1.0 - 0.8 / Math.pow(d, 0.2));
-		
-		velocity = velocity / 1.4; //!!
-		
-		return (int)(d / velocity * 60);
-	}
+//	private int getTimeFromDistance(double d) {
+//		if (d < 0) {
+//			System.err.println("Negative distance found in getTimeFromDistance()!");
+//			return 0;
+//		}
+//		
+//		d = d * 1.3;
+//		
+//		double velocity;
+//		if (d < 0.5)
+//			velocity = 8;
+//		else
+//			velocity = 100.0 * (1.0 - 0.8 / Math.pow(d, 0.2));
+//		
+//		velocity = velocity / 1.4; //!!
+//		
+//		return (int)(d / velocity * 60);
+//	}
 	
 	//==================================================================
 	//    For API test -- get great circle distance from coordinates
@@ -979,85 +1260,146 @@ public class Scheduling2 {
 	//    class MustCountyInfo
 	//============================
 	private class MustCountyInfo {
-		private List<Integer> days = new ArrayList<Integer>();
-		private List<Cluster> assignedClusters = new ArrayList<Cluster>();
+		private Map<Integer, List<Integer>> daysMapping = new HashMap<Integer, List<Integer>>();
 		
-		private int getNumDays() {
-			return days.size();
+		private List<Integer> getDays(int county) {
+			return daysMapping.get(county); // return null if key=county does not exist
 		}
-		@Override
-		public String toString() {
-			String str = "--MustCountyInfo\n[1.days]";
-			for (Integer i : days)
-				str += " " + i;
-			str += "\n[2.assignedClusters]\n";
-			for (Cluster c : assignedClusters)
-				str += c;
-			str += "\n";
-			return str;
-		}
-	}
-	
-	//===========================================
-	//    class Cluster and ClusterComparator
-	//===========================================
-	private class Cluster {
-		private List<Poi> poiList = new ArrayList<Poi>();
-		private int representingMustCounty;
-		private double score;
-		
-		@Override
-		public String toString() {
-			String str = "--Cluster:\n[1.poiList]\n";
-			for (Poi poi : poiList)
-				str += poi + "\n";
-			str += "[2.representingMustCounty] " + representingMustCounty + "\n[3.score]" + score + "\n";
-			return str;
-		}
-	}
-	private class ClusterComparator implements Comparator<Cluster> {
-		@Override
-		public int compare(Cluster o1, Cluster o2) {
-			if (o1 == null || o2 == null)
+		private int getNumDays(int county) {
+			if (daysMapping.containsKey(county))
+				return daysMapping.get(county).size();
+			else
 				return 0;
-			if (o1.score < o2.score)
+		}
+		private MustCountyInfo(List<DailyInfo> fullInfo) {
+			for (int i = 0; i < fullInfo.size(); ++i) {
+				
+				if (! fullInfo.get(i).getMustCounty().equals("all")) {
+					int county = fullInfo.get(i).getMustCountyIndex();
+					
+					if ( daysMapping.containsKey(county) )
+						daysMapping.get(county).add(i);
+					else {
+						List<Integer> days = new ArrayList<Integer>();
+						days.add(i);
+						daysMapping.put(county, days);
+					}
+				}
+			}
+		}
+		
+		@Override
+		public String toString() {
+			String str = "--MustCountyInfo\n";
+			for (Map.Entry<Integer, List<Integer>> entry : daysMapping.entrySet()) {
+				str += "[mustCounty] " + entry.getKey() + " [days]";
+				for (Integer i : entry.getValue())
+					str += " " + i;
+				str += "\n";
+			}
+			return str;
+		}
+		
+		private List<List<Integer>> getConsecutiveDays() {
+			List<List<Integer>> result = new ArrayList<List<Integer>>();
+			
+			for (Map.Entry<Integer, List<Integer>> entry : daysMapping.entrySet()) {
+				List<Integer> days = entry.getValue();
+				
+				if (days.size() > 1) {
+					List<Integer> consecutiveDays = new ArrayList<Integer>();
+					
+					for (int i = 0; i < days.size(); ++i) {
+						if (consecutiveDays.isEmpty()) {
+							consecutiveDays.add( days.get(i) );
+						} else {
+							if (consecutiveDays.get(consecutiveDays.size() - 1) + 1 == days.get(i)) {
+								consecutiveDays.add( days.get(i) );
+							} else {
+								if (consecutiveDays.size() > 1) {
+									result.add(consecutiveDays);
+								}
+								consecutiveDays = new ArrayList<Integer>();
+								consecutiveDays.add( days.get(i) );
+							}
+						}
+					}
+					if (consecutiveDays.size() > 1) {
+						result.add(consecutiveDays);
+					}
+				}
+			}
+			
+			Collections.sort(result, new ListOfIntegerComparator());
+			return result;
+		}
+	}
+	private class ListOfIntegerComparator implements Comparator<List<Integer>> { //used in MustCountyInfo.getConsecutiveDays() 
+		@Override
+		public int compare(List<Integer> o1, List<Integer> o2) {
+			if (o1 == null || o2 == null || o1.isEmpty() || o2.isEmpty())
+				return 0;
+			if (o1.get(0) < o2.get(0))
 				return -1;
-			if (o1.score > o2.score)
+			if (o1.get(0) > o2.get(0))
 				return 1;
 			return 0;
 		}
 	}
 	
-	//==================
-	//    class Slot
-	//==================
-	private class Slot {
+	//=====================
+	//    class Cluster
+	//=====================
+	private class Cluster {
+		private List<Poi> poiList = new ArrayList<Poi>();
+		private int representingMustCounty;
+		private Poi centerPoi;
+		private double score;
+		
+		private Cluster() {
+		}
+		private Cluster(Cluster cluster) {
+			this.poiList = new ArrayList<Poi>();
+			for (Poi poi : cluster.poiList)
+				this.poiList.add(poi);
+			
+			this.representingMustCounty = cluster.representingMustCounty;
+			
+			this.centerPoi = new Poi(cluster.centerPoi);
+			
+			this.score = cluster.score;
+		}
+		@Override
+		public String toString() {
+			String str = "--Cluster:\n[1.poiList]\n";
+			for (Poi poi : poiList)
+				str += poi + "\n";
+			str += "[2.representingMustCounty] " + representingMustCounty + "\n[3.centerPoi]" + centerPoi + "\n[4.score]" + score;
+			return str;
+		}
+	}
+	
+	//=========================
+	//    class BlockOfDays
+	//=========================
+	private class BlockOfDays {
 		private List<Integer> days = new ArrayList<Integer>(); //start from 0
-		private int firstCounty;
-		private int lastCounty;
-		private Set<Integer> feasibleCounty = new HashSet<Integer>();
-		private List<Cluster> assignedClusters = new ArrayList<Cluster>();
+		private String type; //"mustCounty" or "slot"
+		private Integer mustCounty; //for type "mustCounty"
+		private Set<Integer> feasibleCounty = new HashSet<Integer>(); //for type "slot"
 		
 		private int getNumDays() {
 			return days.size();
 		}
-		private int getNumAssignedClusters() {
-			return assignedClusters.size();
-		}
-
 		@Override
 		public String toString() {
-			String str = "--Slot\n[1.days]";
+			String str = "--BlockOfDays\n[1.days]";
 			for (Integer i : days)
 				str += " " + i;
-			str += "\n[2.firstCounty] " + firstCounty + " [3.lastCounty] " + lastCounty;
+			str += "\n[2.type] " + type + "\n[3.mustCounty] " + mustCounty;
 			str += "\n[4.feasibleCounty]";
 			for (Integer i : feasibleCounty)
 				str += " " + i;
-			str += "\n[5.assignedClusters]\n";
-			for (Cluster c : assignedClusters)
-				str += c;
-			str += "\n";
 			return str;
 		}
 	}
@@ -1068,16 +1410,16 @@ public class Scheduling2 {
 	private class PoiPair {
 		private int poiIdx1;
 		private int poiIdx2;
-		private double distanceMeasure;
+		private int timeMeasure;
 		
-		private PoiPair(int poiIdx1, int poiIdx2, double distanceMeasure) {
+		private PoiPair(int poiIdx1, int poiIdx2, int timeMeasure) {
 			this.poiIdx1 = poiIdx1;
 			this.poiIdx2 = poiIdx2;
-			this.distanceMeasure = distanceMeasure;
+			this.timeMeasure = timeMeasure;
 		}
 		@Override
 		public String toString() {
-			String str = poiIdx1 + " " + poiIdx2 + " " + distanceMeasure;
+			String str = poiIdx1 + " " + poiIdx2 + " " + timeMeasure;
 			return str;
 		}
 	}
@@ -1086,11 +1428,50 @@ public class Scheduling2 {
 		public int compare(PoiPair o1, PoiPair o2) {
 			if (o1 == null || o2 == null)
 				return 0;
-			if (o1.distanceMeasure < o2.distanceMeasure)
+			if (o1.timeMeasure < o2.timeMeasure)
 				return -1;
-			if (o1.distanceMeasure > o2.distanceMeasure)
+			if (o1.timeMeasure > o2.timeMeasure)
 				return 1;
 			return 0;
+		}
+	}
+	
+	//===================================================================
+	//    function: run insertion heuristic without feasibility check
+	//===================================================================
+	private void runInsertionHeuristic_WithoutFeasibilityCheck(List<Poi> rawPoiList, List<Poi> resultPoiList, int[][] travelTime) {
+		
+		while (! rawPoiList.isEmpty()) {
+			
+			// find a remaining POI which has the shortest distance to any of the selected POI
+			int shortestTime = Integer.MAX_VALUE;
+			int bestIndex = -1;
+			for (int k = 0; k < rawPoiList.size(); ++k) {
+				int thisTime = Poi.findShortestTimeFromPoiToPoiList( rawPoiList.get(k), resultPoiList, travelTime);
+				if (thisTime < shortestTime) {
+					shortestTime = thisTime;
+					bestIndex = k;
+				}
+			}
+			
+			// find a slot where "the distance increments is smallest"
+			int smallestTimeIncrement = Integer.MAX_VALUE;
+			int bestSlotIndex = -1;
+			
+			for (int k = 0; k < resultPoiList.size() - 1; ++k) {
+				int timeIncrement = travelTime[ resultPoiList.get(k).getIndex() ][ rawPoiList.get(bestIndex).getIndex() ]
+						+ travelTime[ rawPoiList.get(bestIndex).getIndex() ][ resultPoiList.get(k+1).getIndex() ]
+						- travelTime[ resultPoiList.get(k).getIndex() ][ resultPoiList.get(k+1).getIndex() ];
+				
+				if (timeIncrement < smallestTimeIncrement) {
+					smallestTimeIncrement = timeIncrement;
+					bestSlotIndex = k;
+				}
+			}
+			
+			// update
+			resultPoiList.add( bestSlotIndex + 1, rawPoiList.get(bestIndex) );
+			rawPoiList.remove(bestIndex);
 		}
 	}
 	
