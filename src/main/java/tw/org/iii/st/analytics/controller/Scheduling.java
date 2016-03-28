@@ -417,10 +417,10 @@ public class Scheduling {
 								if (p.equals(pp)) {
 										continue;
 								}
-								query += "(id='" + p + "' and arrival_id = '" + pp + "') and ";
+								query += "(id='" + p + "' and arrival_id = '" + pp + "') or ";
 						}
 				}
-				query = query.substring(0, query.lastIndexOf(" and"));
+				query = query.substring(0, query.lastIndexOf(" or"));
 
 				double stay;
 
