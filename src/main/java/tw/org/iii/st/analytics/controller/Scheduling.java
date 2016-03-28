@@ -411,21 +411,29 @@ public class Scheduling {
 						return tour;
 				}
 
-				String query = "";
-				for (String p : poi) {
-						for (String pp : poi) {
-								if (p.equals(pp)) {
-										continue;
-								}
-								query += "(id='" + p + "' and arrival_id = '" + pp + "') and ";
+				//String query = "";
+			    StringBuilder sbquery = new StringBuilder();
+				for(Iterator<String> iter = poi.iterator(); iter.hasNext(); ){
+					String p = iter.next();
+					//iter.hasNext()
+					sbquery.append("(id='").append(p).append("' AND arrival_id IN (\"\"");
+					for (String pp : poi) {
+						if (p.equals(pp)) {
+							continue;
 						}
+						sbquery.append(",\"").append(pp).append("\"");
+					}
+					if( iter.hasNext() )
+						sbquery.append(") ) OR ");
+					else
+						sbquery.append(") ) ");
 				}
-				query = query.substring(0, query.lastIndexOf(" and"));
+				//query = query.substring(0, query.lastIndexOf(" or"));
 
 				double stay;
 
 				HashMap<String, HashMap<String, must>> poiInfo = new HashMap<String, HashMap<String, must>>();
-				List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT id,arrival_id,time,stay_time FROM euclid_distance_0826 WHERE " + query + "");
+				List<Map<String, Object>> result = analyticsjdbc.queryForList("SELECT id,arrival_id,time,stay_time FROM euclid_distance_0826 WHERE " + sbquery.toString() + "");
 				for (Map<String, Object> r : result) //取得兩兩景點之間的時間與停留時間
 				{
 						if (!poiInfo.containsKey(r.get("id").toString())) {
