@@ -66,7 +66,7 @@ public class Scheduling {
     private
     @ResponseBody
     List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws Exception {
-
+System.out.println("in startplan");
         if( !isDatabaseConnectionAlive(analyticsjdbc)  && !isDatabaseConnectionAlive(stJdbcTemplate)){
             throw new Exception("no db connection");
         }
