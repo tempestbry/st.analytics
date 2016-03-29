@@ -492,7 +492,7 @@ public class Scheduling {
 								t.setEndTime(addTime(t.getStartTime(), stay));
 						}
 						tour.add(t);
-
+						index++;
 				}
 
 				return tour;
