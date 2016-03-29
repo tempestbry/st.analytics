@@ -31,6 +31,7 @@ import tw.org.iii.model.SchedulingInput;
 import tw.org.iii.model.SchedulingOutput;
 import tw.org.iii.model.TourEvent;
 import tw.org.iii.st.analytics.spring.Application;
+import tw.org.iii.st.analytics.utils.DBUtils;
 
 /**
  * Hello~~
@@ -67,7 +68,7 @@ public class Scheduling {
     @ResponseBody
     List<TourEvent> StartPlan(@RequestBody SchedulingInput json) throws Exception {
 System.out.println("in startplan");
-        if( !isDatabaseConnectionAlive(analyticsjdbc)  && !isDatabaseConnectionAlive(stJdbcTemplate)){
+        if( !DBUtils.isDatabaseConnectionAlive(analyticsjdbc)  && !DBUtils.isDatabaseConnectionAlive(stJdbcTemplate)){
             throw new Exception("no db connection");
         }
 
@@ -380,25 +381,7 @@ System.out.println("in startplan");
     }
 
 
-    private boolean isDatabaseConnectionAlive(JdbcTemplate jdbcTemplate){
 
-        boolean isAlive = false;
-        int retryCount = -1;
-        do{
-            try {
-                List resultset = jdbcTemplate.queryForList("SELECT 1");
-                isAlive = true;
-            }catch (Exception e){
-System.out.println("no db connection, retry=" + retryCount);
-            } finally {
-                retryCount++;
-            }
-
-        }while( !isAlive && retryCount < 5);
-
-
-        return isAlive;
-    };
 
     private class must {
 
