@@ -10,6 +10,7 @@ import tw.org.iii.model.GeoPoint;
 import tw.org.iii.model.OptimizeInput;
 import tw.org.iii.model.Poi;
 import tw.org.iii.model.TourEvent;
+import tw.org.iii.st.analytics.utils.DBUtils;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -46,7 +47,12 @@ public class OptimizeSchedule {
 	private static double MAGIC_NUM_DRIVESPEED = 60;
 
 	@RequestMapping(value="/Optimize", method = RequestMethod.POST)
-	public @ResponseBody List<TourEvent> optimize(@RequestBody OptimizeInput aOptimzeInput) throws ParseException {
+	public @ResponseBody List<TourEvent> optimize(@RequestBody OptimizeInput aOptimzeInput) throws Exception {
+
+		if( !DBUtils.isDatabaseConnectionAlive(analyticsJdbcTemplate)  && !DBUtils.isDatabaseConnectionAlive(stcjdbcTemplate) ){
+			throw new Exception("no db connection");
+		}
+
 		//result
 		ArrayList<TourEvent> optimizeSchedule = new ArrayList<TourEvent>();
 

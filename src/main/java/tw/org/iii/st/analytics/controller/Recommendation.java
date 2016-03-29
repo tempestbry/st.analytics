@@ -27,6 +27,7 @@ import org.springframework.jdbc.core.RowMapper;
 import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.RecommendInfo;
 import tw.org.iii.model.RecommendInput;
+import tw.org.iii.st.analytics.utils.DBUtils;
 
 @RestController
 @RequestMapping("/Recommendation")
@@ -57,8 +58,12 @@ public class Recommendation {
 	
 	
 	@RequestMapping("/Related")
-	public String[] relatedRecommendation(@RequestBody RecommendInput json) throws ClassNotFoundException, SQLException, NumberFormatException, IOException, ParseException
+	public String[] relatedRecommendation(@RequestBody RecommendInput json) throws Exception
 	{
+		if( !DBUtils.isDatabaseConnectionAlive(analyticsjdbc)  && !DBUtils.isDatabaseConnectionAlive(commonJdbcTemplate)){
+			throw new Exception("no db connection");
+		}
+
 		int resultPOI;
 		if (json.getLimit()==-1)
 			resultPOI = 5;
