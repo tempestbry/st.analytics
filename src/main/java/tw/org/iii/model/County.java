@@ -91,6 +91,16 @@ public class County {
 			return nearbyCounty.get(key);
 	}
 	
+	//====================
+	//    county index
+	//====================
+	public static int getCountyIndex(String countyId) {
+		if (countyId.equals("all"))
+			return 0;
+		else
+			return Integer.parseInt( countyId.substring(2) );
+	}
+	
 	//===================
 	//    county name
 	//===================
@@ -128,6 +138,43 @@ public class County {
 	public static String getCountyName(int countyId) {
 		return countyName.get("TW" + countyId);
 	}
+	
+	//=============================================
+	//    default start location in each county
+	//=============================================
+	public static double[][] defaultStartCoordinate = new double[numCounty][2];
+	
+	static {
+		InputStream inputStream = County.class.getClassLoader().getResourceAsStream("defaultStartLocation.txt");
+		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+		String line;
+		boolean isFirst = true;
+		try {
+			int k = 0;
+			while ((line = bufferedReader.readLine()) != null)   {
+				if (isFirst) { //skip header line
+					isFirst = false;
+					continue;
+				}
+				String[] result = line.split(" ");
+				defaultStartCoordinate[k][0] = Double.parseDouble(result[2]);
+				defaultStartCoordinate[k++][1] = Double.parseDouble(result[3]);
+			}
+		} catch (NumberFormatException | IOException e) {
+			System.err.println("[!!! Error !!!][County] defaultStartCoordinate read data error!");
+			e.printStackTrace();
+		}
+	}
+	
+//	public static String[] startingPoiIdInCounty = new String[]
+//			{"C1_376570000A_000078", "e6449cc1-6047-f3a2-1618-5157c3765714", "331d1dd1-03de-6598-3860-95331d6c5574",
+//			"C1_376430000A_000046", "C1_376440000A_000920", "C1_376580000A_000003",
+//			"K_m07_20040722093203", "C1_387000000A_000002", "N_achi_20061009140205",
+//			"C1_376480000A_000283", "C1_376490000A_000032", "C1_376500000A_000090",
+//			"C1_376600000A_000021", "C1_395000000A_000225", "C1_397000000A_000015",
+//			"C1_376530000A_000328", "A_l50740_20081105222247", "9c935214-d13c-029e-0a35-91d0f2a8b24f",
+//			"dcb22967-7e90-f01b-9a84-6af6ec4b733d", "C1_315080600H_000261", "C1_371020000A_000540",
+//			"Z_jasmine_20051114154859"};
 	
 	//========================
 	//    county selection

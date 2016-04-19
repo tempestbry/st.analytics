@@ -18,7 +18,7 @@ public class DailyInfo {
 	private boolean isEndPoiUseStayTime;
 	
 	public int getMustCountyIndex() {
-		return mustCounty.equals("all") ? 0 : Integer.parseInt( mustCounty.replaceAll("[^0-9]", "") );
+		return County.getCountyIndex(mustCounty);
 	}
 	
 	//------------------------

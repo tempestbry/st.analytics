@@ -67,28 +67,33 @@ public class Scheduling2 {
 	List<TourEvent> createItinerary(@RequestBody SchedulingInput input) throws Exception {
 		System.out.println("Program begin!");
 		
-		// database connection test
-		while (true) {
-			int count = 0;
-			try {
-//				analyticsjdbc.queryForList("SELECT poiId FROM Scheduling2 LIMIT 1");
-				analyticsJdbc.queryForList("SELECT poiId FROM Scheduling2 WHERE poiId = 'e6449cc1-6047-f3a2-1618-5157c3765714'");
-				break;
-				
-			} catch (RecoverableDataAccessException e) {
-				e.printStackTrace();
-				++count;
-				System.err.println("Connection failure count " + count);
-				if (count == 5) {
-					throw e;
-				}
-			}
-		}
+//		// database connection test
+//		while (true) {
+//			int count = 0;
+//			try {
+////				analyticsjdbc.queryForList("SELECT poiId FROM Scheduling2 LIMIT 1");
+//				analyticsJdbc.queryForList("SELECT poiId FROM Scheduling2 WHERE poiId = 'e6449cc1-6047-f3a2-1618-5157c3765714'");
+//				break;
+//				
+//			} catch (RecoverableDataAccessException e) {
+//				e.printStackTrace();
+//				++count;
+//				System.err.println("Connection failure count " + count);
+//				if (count == 5) {
+//					throw e;
+//				}
+//			}
+//		}
 		
 		Date dateSchedulingStart = new Date(System.currentTimeMillis());
 		
 		boolean isDisplaySql = true;
 		QueryDatabase queryDatabase = new QueryDatabase(analyticsJdbc, stJdbc, isDisplaySql);
+		
+		// POI id repository (prevent selecting the same POIs)
+		Set<String> poiIdRepository = new HashSet<String>();
+//		poiIdRepository.add(itineraryStartPoi.getPoiId());
+//		poiIdRepository.add(itineraryEndPoi.getPoiId());
 		
 		//-------------------------
 		//    handle input data
@@ -120,12 +125,14 @@ public class Scheduling2 {
 		Poi itineraryStartPoi = null;
 		if (gps != null) {
 			queryDatabase.display("-get itinerary start POI");
-			itineraryStartPoi = queryDatabase.getNearbyPoiByCoordinate(gps.getLat(), gps.getLng(), false, looseType); //could be null
+			itineraryStartPoi = queryDatabase.getNearbyPoiByCoordinate(gps.getLat(), gps.getLng(), false, looseType, true); //could be null
 		}
 		if (itineraryStartPoi == null) {
-			String itineraryStartPoiId = "e6449cc1-6047-f3a2-1618-5157c3765714"; //台北火車站 POINT(25.047767 121.517114)
+			int startCountyIdx = County.getCountyIndex( input.getCityList().get(0) );
+			if (startCountyIdx == 0)
+				startCountyIdx = 2; //default for now: Taipei city
 			queryDatabase.display("-get itinerary start POI");
-			itineraryStartPoi = queryDatabase.getPoiByPoiId(itineraryStartPoiId, false, looseType);
+			itineraryStartPoi = queryDatabase.getNearbyPoiByCoordinate( County.defaultStartCoordinate[startCountyIdx - 1], false, looseType, true );
 		}
 		
 		Poi itineraryEndPoi = new Poi(itineraryStartPoi);
@@ -134,12 +141,9 @@ public class Scheduling2 {
 		if (mustPoiIdList.contains(itineraryStartPoi.getPoiId())) {
 			itineraryStartPoi.setMustPoi(true);
 			mustPoiIdList.remove( itineraryStartPoi.getPoiId() );
+			
+			poiIdRepository.add(itineraryStartPoi.getPoiId());
 		}
-		
-		// create and update POI id repository (prevent selecting the same POIs)
-		Set<String> poiIdRepository = new HashSet<String>();
-		poiIdRepository.add(itineraryStartPoi.getPoiId());
-		poiIdRepository.add(itineraryEndPoi.getPoiId());
 		
 		//----------------------------------------------
 		//    initialize daily itinerary information
@@ -237,7 +241,7 @@ public class Scheduling2 {
 							queryDatabase.display("-get additional POI to fullfill must county");
 							poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
 									numDayOfCounty - numMustPoiInCounty[i],
-									counties, "free", looseType); // note: not force "allOpen" here, so open days have to be checked in stage 2
+									counties, "free", looseType, true); // note: not force "allOpen" here, so open days have to be checked in stage 2
 							isDuplicatedPoi = false;
 							for (Poi poi : poiList) {
 								if (poiIdRepository.contains(poi.getPoiId())) {
@@ -623,7 +627,7 @@ public class Scheduling2 {
 				do {
 					queryDatabase.display("-get enough POI in a slot");
 					poiList = queryDatabase.getRandomPoiListByCountyAndOpenDay(
-							numAdditionalClusters, candidateCounty, "free", looseType); // note: not force "allOpen" here, so open days have to be checked in stage 2
+							numAdditionalClusters, candidateCounty, "free", looseType, true); // note: not force "allOpen" here, so open days have to be checked in stage 2
 					isDuplicatedPoi = false;
 					for (Poi poi : poiList) {
 						if (poiIdRepository.contains(poi.getPoiId())) {
@@ -814,10 +818,46 @@ public class Scheduling2 {
 				}
 			}
 			
+			// dailyInfo settings
 			if (i < numDay - 1) { //not the last day
 				dailyInfo.setEndPoi( fullCluster[i + 1].centerPoi );
 				dailyInfo.setTravelToEndPoi(false);
 				dailyInfo.setEndPoiUseStayTime(false);
+			}
+			
+			// when numDay >= 2 and last day, check if there is enough time to visit the predetermined area
+			// if there is not enough time, then visit the itinerary end POI
+			if (numDay >= 2 && i == numDay - 1) {
+				
+				queryDatabase.display("-in the last day, get time between POI pairs");
+				int estimatedTime = queryDatabase.getTimeBetweenPoi( fullItineraryPoi.get( fullItineraryPoi.size() - 1 ), fullCluster[i].centerPoi )
+						+ queryDatabase.getTimeBetweenPoi( fullCluster[i].centerPoi, itineraryEndPoi );
+				
+				if ( (endTimeEachDayInMinutes - startTimeEachDayInMinutes) - estimatedTime <= 60 ) {
+					
+					int numSelectionLB = 1;
+					int numSelectionUB = 1;
+					double deltaKm = 15;
+					double deltaKmIncrement = 15;
+					double deltaKmTermination = 90;
+					Set<Integer> countiesForSearch = new HashSet<Integer>();
+					countiesForSearch.add(itineraryEndPoi.getCountyIndex());
+					
+					queryDatabase.display("-in the last day, replace the cluster center POI");
+					List<Poi> pois = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDayWithinSquare(
+							numSelectionLB, numSelectionUB, itineraryEndPoi,
+							deltaKm, deltaKmIncrement, deltaKmTermination,
+							countiesForSearch, dailyInfo.getDayOfWeek(), "RAND()", looseType, true);
+					if (! pois.isEmpty()) {
+						fullCluster[i].centerPoi = pois.get(0);
+						fullCluster[i].poiList = pois;
+					}
+					else {
+						fullCluster[i].centerPoi = itineraryEndPoi;
+						pois.add(itineraryEndPoi);
+						fullCluster[i].poiList = pois;
+					}
+				}
 			}
 			
 			System.out.println("--- Day " + (i+1) + " --- before adding candidate POIs:");
@@ -829,7 +869,7 @@ public class Scheduling2 {
 			//---------------------------------------------------
 			// get counties used for searching POI
 			Set<Integer> countiesForSearch = new HashSet<Integer>();
-			if (dailyInfo.getMustCounty().equals("all")) {
+			if (dailyInfo.getMustCounty().equals("all") || mustCountyInfo.getNumDays(dailyInfo.getMustCountyIndex()) >= 4) {
 				for (Poi poi : poiList) {
 					int j = poi.getCountyIndex();
 					countiesForSearch.add(j);
@@ -844,25 +884,26 @@ public class Scheduling2 {
 			int numCandidatePoi = Math.max(numPoiForSelectionUpperBound - poiList.size(), 0);
 			
 			if (numCandidatePoi > 0) {
-				// if the only one POI is a must-POI which is from ST_V3_ZH_TW.PoiFinalView2, then need another centerPoi for searching candidates
-				if (fullCluster[i].poiList.size() == 1 && fullCluster[i].poiList.get(0).getDatabaseSource() == 1) {
+				// if the centerPoi is not a backbone POI, then need another centerPoi for searching candidates
+				if (! fullCluster[i].centerPoi.isBackbonePoi()) {
 					queryDatabase.display("-get alternative center POI");
-					double[] tempCoordinate = Poi.parseCoordinate( fullCluster[i].poiList.get(0).getLocation() );
-					fullCluster[i].centerPoi = queryDatabase.getNearbyPoiByCoordinate( tempCoordinate[0], tempCoordinate[1], false, looseType );
+					fullCluster[i].centerPoi = queryDatabase.getNearbyPoiByCoordinate(
+								fullCluster[i].centerPoi.getCoordinate(), false, looseType, true );
 				}
 				
-				//select candidate POIs from database
+				// Parameters: select candidate POIs from database
 				int numSelectionLB = 10;
 				int numSelectionUB = 30;
 				int timeLB = 0;
 				int timeUB = 30;
-				int timeUBIncrement = 15;
+				int timeUBIncrement = 10;
+				int timeUBTermination = 60;
 				
 				List<Poi> foundPoiList;
 				
 				queryDatabase.display("-get candidate POI");
 				foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
-						numSelectionLB, numSelectionUB, fullCluster[i].centerPoi.getPoiId(), timeLB, timeUB, timeUBIncrement,
+						numSelectionLB, numSelectionUB, fullCluster[i].centerPoi.getPoiId(), timeLB, timeUB, timeUBIncrement, timeUBTermination,
 						countiesForSearch, dailyInfo.getDayOfWeek(), "checkinTotal DESC", looseType);
 				Iterator<Poi> foundPoiIterator = foundPoiList.iterator();
 				while (foundPoiIterator.hasNext()) {
@@ -870,6 +911,46 @@ public class Scheduling2 {
 					if  (poiIdRepository.contains(poi.getPoiId())) {
 						foundPoiIterator.remove();
 					}
+				}
+				
+				// if candidate POI is not enough, select more POI within square
+				List<Poi> extraPoiList = null;
+				if (foundPoiList.size() < numSelectionLB) {
+					
+					// Parameters: select extra candidate POIs from database
+					double deltaKm = 10;
+					double deltaKmIncrement = 10;
+					double deltaKmTermination = 40;
+					
+					queryDatabase.display("-get candidate POI within square");
+					extraPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDayWithinSquare(
+							numSelectionLB, numSelectionUB, fullCluster[i].centerPoi,
+							deltaKm, deltaKmIncrement, deltaKmTermination,
+							countiesForSearch, dailyInfo.getDayOfWeek(), "RAND()", looseType, false);
+					Iterator<Poi> extraPoiIterator = extraPoiList.iterator();
+					while (extraPoiIterator.hasNext()) {
+						Poi poi = extraPoiIterator.next();
+						
+						if  (poiIdRepository.contains(poi.getPoiId())) {
+							extraPoiIterator.remove();
+							continue;
+						}
+						for (Poi foundPoi : foundPoiList) {
+							if (poi.getPoiId().equals( foundPoi.getPoiId() )) {
+								extraPoiIterator.remove();
+								break;
+							}
+						}
+					}
+					
+					// set timeMeasureToFixedPoi
+					for (Poi poi : extraPoiList) {
+						// approximated time
+						poi.setTimeMeasureToFixedPoi( DistanceAndTime.getEstimatedTimeOfNearbyPoi(poi, fullCluster[i].centerPoi) );
+					}
+					
+					// combine
+					foundPoiList.addAll( extraPoiList );
 				}
 				
 				// select #=numCandidatePoi from foundPoiList by probability/scores
@@ -1038,18 +1119,43 @@ public class Scheduling2 {
 			// when there are some minutes left in the end of the day, try to add more POI
 			if (minutesLeft >= minutesLeftThreshold) {
 				
-				String centerPoiId = itinerary.get(itinerary.size() - 2).getPoiId();
+//				String centerPoiId = itinerary.get(itinerary.size() - 2).getPoiId();
+				
+//				// Parameters
+//				int numSelectionLB = 1;
+//				int numSelectionUB = 5;
+//				int timeLB = 0;
+//				int timeUB = 15;
+//				int timeUBIncrement = 0;
+//				int timeUBTermination = 60;
+//				
+//				// get extra POI
+//				queryDatabase.display("-get extra POI if there are minutes left in the end of the day");
+//				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
+//						numSelectionLB, numSelectionUB, centerPoiId, timeLB, timeUB, timeUBIncrement, timeUBTermination,
+//						countiesForSearch, dailyInfo.getDayOfWeek(), "RAND()", looseType);
+//				
+//				Iterator<Poi> foundPoiIterator = foundPoiList.iterator();
+//				while (foundPoiIterator.hasNext()) {
+//					Poi poi = foundPoiIterator.next();
+//					if  (poiIdRepository.contains(poi.getPoiId())) {
+//						foundPoiIterator.remove();
+//					}
+//				}
+				
+				
+				// Parameters
 				int numSelectionLB = 1;
 				int numSelectionUB = 5;
-				int timeLB = 0;
-				int timeUB = 15;
-				int timeUBIncrement = 0;
+				double deltaKm = 5;
+				double deltaKmIncrement = 5;
+				double deltaKmTermination = 15;
 				
-				// get extra POI
-				queryDatabase.display("-get extra POI if there are minutes left in the end of the day");
-				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDay(
-						numSelectionLB, numSelectionUB, centerPoiId, timeLB, timeUB, timeUBIncrement,
-						countiesForSearch, dailyInfo.getDayOfWeek(), "RAND()", looseType);
+				queryDatabase.display("-get extra POI if there are minutes left in the end of the day (within square)");
+				List<Poi> foundPoiList = queryDatabase.getRandomPoiListByCenterPoiIdAndCountyAndOpenDayWithinSquare(
+						numSelectionLB, numSelectionUB, itineraryPoi.get( itineraryPoi.size() - 2 ),
+						deltaKm, deltaKmIncrement, deltaKmTermination,
+						countiesForSearch, dailyInfo.getDayOfWeek(), "RAND()", looseType, false);
 				
 				Iterator<Poi> foundPoiIterator = foundPoiList.iterator();
 				while (foundPoiIterator.hasNext()) {
@@ -1058,6 +1164,7 @@ public class Scheduling2 {
 						foundPoiIterator.remove();
 					}
 				}
+				
 				
 				// get time matrix
 				List<Poi> completeDayEndPoiList = new ArrayList<Poi>();

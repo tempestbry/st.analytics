@@ -10,7 +10,8 @@ public class Poi {
 	// from database -- always exists
 	private String poiId;
 	private String poiName;
-	private String location;
+	private double latitude;
+	private double longitude;
 	private String countyId;
 	private int checkins;
 	private boolean[] theme = new boolean[8];
@@ -21,7 +22,9 @@ public class Poi {
 	private int timeMeasureToFixedPoi; //travel time used to calculate scores
 	
 	// database source
-	private int databaseSource; // 0: analytics.Scheduling2 // 1: ST_V3_ZH_TW.PoiFinalView2
+	private int source;	// = 1: analytics.Scheduling2, distanceBackbone == 1 (is distance backbone!!)
+				// = 2: analytics.Scheduling2, distanceBackbone == 0 (not distance backbone)
+				// = 3: ST_V3_ZH_TW.PoiFinalView2 (not distance backbone)
 	
 	// from user input
 	private boolean isMustPoi;
@@ -29,13 +32,12 @@ public class Poi {
 	// used to access distance matrix
 	private int index;
 	
-	//private double longitude;
-	//private double latitude;
 	
 	public void setFromQueryResult(Map<String, Object> queryResultPoi, int looseType) {
 		poiId = queryResultPoi.get("poiId").toString();
 		poiName = queryResultPoi.get("name").toString();
-		location = queryResultPoi.get("location").toString();
+		latitude = Double.parseDouble( queryResultPoi.get("latitude").toString() );
+		longitude = Double.parseDouble( queryResultPoi.get("longitude").toString() );
 		countyId = queryResultPoi.get("countyId").toString();
 		
 		Object tempObj1 = queryResultPoi.get("checkinTotal");
@@ -62,7 +64,10 @@ public class Poi {
 			timeMeasureToFixedPoi = Integer.parseInt( queryResultPoi.get("timeMeasureToFixedPoi").toString() );
 		}
 		
-		databaseSource = 0;
+		if (queryResultPoi.get("distanceBackbone").toString().equals("1"))
+			source = 1;
+		else
+			source = 2;
 	}
 	
 	public void setFromQueryResult_ST(List<Map<String, Object>> queryResult, int looseType) {
@@ -71,7 +76,11 @@ public class Poi {
 		
 		poiId = queryResultPoi.get("poiId").toString();
 		poiName = queryResultPoi.get("name").toString();
-		location = queryResultPoi.get("location").toString();
+		
+		double[] coordinate = parseCoordinate( queryResultPoi.get("location").toString() );
+		latitude = coordinate[0];
+		longitude = coordinate[1];
+		
 		countyId = queryResultPoi.get("countyId").toString();
 		
 		Object tempObj1 = queryResultPoi.get("checkinTotal");
@@ -98,7 +107,7 @@ public class Poi {
 			openHoursOfSevenDays[i] = null; //database does not provide clean open hours information!!
 		}
 		
-		databaseSource = 1;
+		source = 3;
 	}
 	
 	@Override
@@ -114,7 +123,24 @@ public class Poi {
 	}
 	
 	public int getCountyIndex() {
-		return Integer.parseInt( countyId.replaceAll("[^0-9]", "") );
+		return County.getCountyIndex(countyId);
+	}
+	
+	public double[] getCoordinate() {
+		double[] coordinate = {latitude, longitude};
+		return coordinate;
+	}
+	public void setCoordinate(double[] coordinate) {
+		this.latitude = coordinate[0];
+		this.longitude = coordinate[1];
+	}
+	public void setCoordinate(double latitude, double longitude) {
+		this.latitude = latitude;
+		this.longitude = longitude;
+	}
+	
+	public boolean isBackbonePoi() {
+		return (source == 1) ? true : false;
 	}
 	
 	//============================
@@ -135,13 +161,21 @@ public class Poi {
 	public void setPoiName(String poiName) {
 		this.poiName = poiName;
 	}
-
-	public String getLocation() {
-		return location;
+	
+	public double getLatitude() {
+		return latitude;
 	}
 
-	public void setLocation(String location) {
-		this.location = location;
+	public void setLatitude(double latitude) {
+		this.latitude = latitude;
+	}
+
+	public double getLongitude() {
+		return longitude;
+	}
+
+	public void setLongitude(double longitude) {
+		this.longitude = longitude;
 	}
 
 	public String getCountyId() {
@@ -191,13 +225,13 @@ public class Poi {
 	public void setTimeMeasureToFixedPoi(int timeMeasureToFixedPoi) {
 		this.timeMeasureToFixedPoi = timeMeasureToFixedPoi;
 	}
-
-	public int getDatabaseSource() {
-		return databaseSource;
+	
+	public int getSource() {
+		return source;
 	}
 
-	public void setDatabaseSource(int databaseSource) {
-		this.databaseSource = databaseSource;
+	public void setSource(int source) {
+		this.source = source;
 	}
 
 	public boolean isMustPoi() {
@@ -226,7 +260,8 @@ public class Poi {
 		super();
 		this.poiId = poi.poiId;
 		this.poiName = poi.poiName;
-		this.location = poi.location;
+		this.latitude = poi.latitude;
+		this.longitude = poi.longitude;
 		this.countyId = poi.countyId;
 		this.checkins = poi.checkins;
 		
@@ -241,7 +276,7 @@ public class Poi {
 			this.openHoursOfSevenDays[i] = poi.openHoursOfSevenDays[i];
 		
 		this.timeMeasureToFixedPoi = poi.timeMeasureToFixedPoi;
-		this.databaseSource = poi.databaseSource;
+		this.source = poi.source;
 		this.isMustPoi = poi.isMustPoi;
 		this.index = poi.index;
 	}
@@ -268,15 +303,15 @@ public class Poi {
 		
 		double[] poiCenter = new double[2];
 		if (poiList.size() == 1) {
-			poiCenter = parseCoordinate( poiList.get(0).getLocation() );
+			poiCenter[0] = poiList.get(0).getLatitude();
+			poiCenter[1] = poiList.get(0).getLongitude();
 		}
 		else {
 			double sumLatitude = 0;
 			double sumLongitude = 0;
 			for (Poi poi : poiList) {
-				double[] coordinate = parseCoordinate(poi.getLocation());
-				sumLatitude += coordinate[0];
-				sumLongitude += coordinate[1];
+				sumLatitude += poi.getLatitude();
+				sumLongitude += poi.getLongitude();
 			}
 			poiCenter[0] = sumLatitude / poiList.size();
 			poiCenter[1] = sumLongitude / poiList.size();
@@ -487,9 +522,16 @@ public class Poi {
 		double y = (end[0] - start[0]) * PI / 180;
 		return Math.hypot(x, y) * R; //km
 	}
-
-	public static double getGreatCircleDistance(String start, String end) { //Equirectangular approximation
-		return getGreatCircleDistance(Poi.parseCoordinate(start), Poi.parseCoordinate(end));
+	public static double getGreatCircleDistance(double startLatitude, double startLongitude, double endLatitude, double endLongitude) {
+		double[] start = new double[]{startLatitude, startLongitude};
+		double[] end = new double[]{endLatitude, endLongitude};
+		return getGreatCircleDistance(start, end);
+	}
+	public static double[] getCircleDistanceArray(Poi poi0, List<Poi> poiList) {
+		double[] distanceMeasure = new double[poiList.size()];
+		for (int i = 0; i < poiList.size(); ++i)
+			distanceMeasure[i] = getGreatCircleDistance( poi0.getCoordinate(), poiList.get(i).getCoordinate() );
+		return distanceMeasure;
 	}
 	
 	public static double[][] getPairwiseCircleDistanceMatrix(List<Poi> poiList) {
@@ -498,7 +540,7 @@ public class Poi {
 			for (int j = 0; j < poiList.size(); ++j) {
 				if (i == j)
 					continue;
-				distanceMeasure[i][j] = getGreatCircleDistance( poiList.get(i).getLocation(), poiList.get(j).getLocation() );
+				distanceMeasure[i][j] = getGreatCircleDistance( poiList.get(i).getCoordinate(), poiList.get(j).getCoordinate() );
 			}
 		}
 		return distanceMeasure;
@@ -507,23 +549,11 @@ public class Poi {
 		double[][] distanceMeasure = new double[poiList.size()][poiList.size()];
 		for (int i = 0; i < poiList.size() - 1; ++i) {
 			for (int j = i + 1; j < poiList.size(); ++j) {
-				distanceMeasure[i][j] = getGreatCircleDistance( poiList.get(i).getLocation(), poiList.get(j).getLocation() );
+				distanceMeasure[i][j] = getGreatCircleDistance( poiList.get(i).getCoordinate(), poiList.get(j).getCoordinate() );
 			}
 		}
 		return distanceMeasure;
 	}
-/*	public double[] getCoordinate() {
-		double[] coordinate = {latitude, longitude};
-		return coordinate;
-	}
-	public void setCoordinate(double[] coordinate) {
-		this.latitude = coordinate[0];
-		this.longitude = coordinate[1];
-	}
-	public void setCoordinate(double latitude, double longitude) {
-		this.latitude = latitude;
-		this.longitude = longitude;
-	}*/
 	
 }
 
