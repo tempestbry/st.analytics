@@ -5,7 +5,7 @@
 	<artifactId>st.analytics</artifactId>
 	<packaging>war</packaging>
 
-	<version>0.0.2-SNAPSHOT</version>
+	<version>0.0.1-SNAPSHOT</version>
 	<name>st.analytics Maven Webapp</name>
 	<url>http://maven.apache.org</url>
 
