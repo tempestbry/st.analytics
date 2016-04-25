@@ -9,7 +9,6 @@ import java.net.URL;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,10 +23,18 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
+
+
+
+
+
+
+
+
+
 import tw.org.iii.model.PoiCheckins;
 import tw.org.iii.model.RecommendInfo;
 import tw.org.iii.model.RecommendInput;
-import tw.org.iii.st.analytics.utils.DBUtils;
 
 @RestController
 @RequestMapping("/Recommendation")
@@ -43,33 +50,40 @@ public class Recommendation {
 	@Autowired
 	@Qualifier("analyticsJdbcTemplate")
 	private JdbcTemplate analyticsjdbc;
-
-	@Autowired
-	@Qualifier("RecomendationBackend")
-	private RecomendationBackend backend;
 	
+	//test
 	
-	@RequestMapping("/StartBackend")
-	public void StartBackend()
-	{
-		backend.StartBackend();
-	}
-	
-	
+//	@RequestMapping("/ThisTime")
+//	public @ResponseBody String[] homeRecommendation(@RequestParam(value = "px", defaultValue = "121.5548724") double px,@RequestParam(value = "py", defaultValue = "25.0584759") double py) throws ParseException, ClassNotFoundException, SQLException, IOException
+//	{
+//		timeInfo ti = getWeekday();
+//		String[] result = FindBestPOI(ti,px,py);
+//		
+//		return result;
+//	}
+//	
+//	@RequestMapping("/Related")
+//	public String[] relatedRecommendation(@RequestParam(value = "pid", defaultValue = "") String pid) throws ClassNotFoundException, SQLException
+//	{
+//		List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
+//				+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county ORDER BY total DESC LIMIT 0,5");
+//		
+//		
+//		int i=0;
+//		String result[] = new String[5];
+//		for (RecommendInfo ri : sqlresult) 
+//		{
+//			result[i++] = ri.getRecommendID();
+//		}
+//				
+//		return result;
+//      
+//	}
 	
 	@RequestMapping("/Related")
-	public String[] relatedRecommendation(@RequestBody RecommendInput json) throws Exception
+	public String[] relatedRecommendation(@RequestBody RecommendInput json) throws ClassNotFoundException, SQLException, NumberFormatException, IOException, ParseException
 	{
-		if( !DBUtils.isDatabaseConnectionAlive(analyticsjdbc)  && !DBUtils.isDatabaseConnectionAlive(commonJdbcTemplate)){
-			throw new Exception("no db connection");
-		}
-
-		int resultPOI;
-		if (json.getLimit()==-1)
-			resultPOI = 5;
-		else
-			resultPOI = json.getLimit();
-		String result[] = new String[resultPOI];
+		String result[] = new String[5];
 		
 		String pid = json.getPoiId();
 		if ("".equals(pid) || pid == null) //主頁的猜你喜歡
@@ -79,22 +93,17 @@ public class Recommendation {
 			{
 				timeInfo ti = getWeekday();
 				//String spl[] = json.getGps().split(",");
-				result = FindBestPOI(ti, json.getGps().getLng(), json.getGps().getLat(),resultPOI);
+				result = FindBestPOI(ti, json.getGps().getLng(), json.getGps().getLat());
 				return result;
 			}
 			else //智慧觀光平台的
 			{
-				if (json.getLimit()==-1) //預設回傳10個
-					resultPOI = 10;
-				else
-					resultPOI = json.getLimit();
-					
-				result = FinStBestPOI(json,resultPOI);
+				result = FinStBestPOI(json);
 				return result;
 			}
 	
 		}
-		else //相關推薦
+		else
 		{
 			//花東場域
 			if (json.getCountyId().contains("TW18") && json.getCountyId().contains("TW19"))
@@ -105,7 +114,7 @@ public class Recommendation {
 					countyList += "place_county = '"+c.get(i)+"' or ";
 				countyList += "place_county = '"+c.get(c.size()-1)+"'";
 				List<RecommendInfo> sqlresult = Query1("SELECT recommend_id,(0.5*AR+0.2*Top+0.3*CB) AS total FROM Hybrid WHERE "
-						+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county and ("+countyList+") and type = '"+json.getReturnType()+"' ORDER BY total DESC LIMIT 0,"+resultPOI+"");
+						+ "place_id = '"+pid+"' and CB <> 1 and place_county = recommend_county and ("+countyList+") and type = '"+json.getReturnType()+"' ORDER BY total DESC LIMIT 0,5");
 				int i=0;
 				
 				for (RecommendInfo ri : sqlresult) 
@@ -118,7 +127,7 @@ public class Recommendation {
 				{
 					HashMap<String,defaultResult> tmp = new HashMap<String,defaultResult>();
 					List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and id = '"+pid+"'");
-					List<place_info> sql1 = Query2("SELECT IFNULL(fb_id,UUID()) AS uniq,id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_id");
+					List<place_info> sql1 = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" and location2 <> 'POINT(0 0)' and checkins > 20000 and id <> '"+pid+"' and fb_name IS NOT NULL GROUP BY fb_name");
 					for (place_info s : sql) 
 					{
 						double latitude = 0,latitude_tmp;
@@ -144,48 +153,60 @@ public class Recommendation {
 					for (Map.Entry<String, Integer> entry:sortresult) 
 				    {
 						result[i++] =entry.getKey();
-						if (i==resultPOI)
+						if (i==5)
 							break;
 				    }		
 					
 				}
 				
-				if (i<resultPOI) //最後確認
+				if (i<5) //最後確認
 				{
 					
 					List<place_info> sql = Query2("SELECT id,location2,checkins FROM recommendation WHERE "+countyList.replace("place_county", "countyId")+" ORDER BY checkins");
 					for (place_info s : sql) 
 				    {
 						result[i++] = s.id;
-						if (i==resultPOI)
+						if (i==5)
 							break;
 					}
 				}
 			}
 			else //智慧觀光場域
 			{
-				if (json.getLimit()==-1)
-					resultPOI = 10;
-				else
-					resultPOI = json.getLimit();
+//				ArrayList<String> tmp = new ArrayList<String>();
+//				int i=0;
+//				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and cb > 0 ORDER BY cb DESC limit 0,10");
+//				for (Map<String, Object> r : rs) 
+//					tmp.add(r.get("related_id").toString());
+//				long seed = System.nanoTime();
+//				Collections.shuffle(tmp, new Random(seed));
+//				for (String t : tmp) 
+//			    {
+//					result[i++] = t;
+//					if (i==5)
+//						break;
+//				}
 				
 				normalize n = new normalize();
-				double cb,checkins;
+				double cb,ar,checkins;
 				HashMap<String,info> record = new HashMap<String,info>();
-				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,checkins FROM related_recommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
+				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,ar,top FROM IntegratedRecommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
 				if (rs.size()>0)
 				{
 					boolean flag = true;
 					for (Map<String, Object> r : rs) 
 					{
 						cb = Double.parseDouble(r.get("cb")+"");
-						checkins = Double.parseDouble(r.get("checkins")+"");
-						info i = new info(cb,checkins);
+						ar = Double.parseDouble(r.get("ar")+"");
+						checkins = Double.parseDouble(r.get("top")+"");
+						info i = new info(cb,ar,checkins);
 						record.put(r.get("related_id").toString(), i);
 						if (flag)
 						{
 							n.cbMax = cb;
 							n.cbMin = cb;
+							n.arMax = ar;
+							n.arMin = ar;
 							n.checkinsMax = checkins;
 							n.checkinsMin = checkins;
 							flag = false;
@@ -194,16 +215,21 @@ public class Recommendation {
 							n.cbMax = cb;
 						if (cb < n.cbMin)
 							n.cbMin = cb;
+						if (ar > n.arMax)
+							n.arMax = ar;
+						if (ar < n.arMin)
+							n.arMin = ar;
 						if (checkins > n.checkinsMax)
 							n.checkinsMax = checkins;
 						if (checkins < n.checkinsMin)
 							n.checkinsMin = checkins;
 					}
 					n.cbValue = n.cbMax - n.cbMin;
+					n.arValue = n.arMax - n.arMin;
 					n.checkinsValue = n.checkinsMax - n.checkinsMin;
-					result = integrated(record,n,resultPOI);
+					result = integrated(record,n);
 				}
-				else //沒有在integrated表裡面
+				else
 				{
 					rs = commonJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
 					String county = rs.get(0).get("countyId").toString();
@@ -211,13 +237,12 @@ public class Recommendation {
 					int value = 100000;
 					do
 					{
-						rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' and countyId ='"+county+"' ORDER by rand() limit 0,"+resultPOI+"");
-//						rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY uniq ORDER by rand() limit 0,"+resultPOI+"");
+						rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY fb_id ORDER by rand() limit 0,10");
 						for (Map<String, Object> i : rs)
 						{
 							if (!tmp.contains(i.get("id").toString()))
 								tmp.add(i.get("id").toString());
-							if (tmp.size()==resultPOI)
+							if (tmp.size()==10)
 								break;
 						}
 							
@@ -227,111 +252,9 @@ public class Recommendation {
 							break;
 						}
 					}
-					while (tmp.size()<resultPOI);
-					
-					//沒有任何結果時, random
-					if (tmp.size()<resultPOI)
-					{
-						rs = commonJdbcTemplate.queryForList("SELECT id FROM Poi WHERE countyId = '"+county+"' and type = '"+json.getReturnType()+"' ORDER by rand()");
-						for (Map<String, Object> i : rs)
-						{
-							if (!tmp.contains(i.get("id").toString()))
-								tmp.add(i.get("id").toString());
-							if (tmp.size()==resultPOI)
-								break;
-						}
-					}
-					
+					while (tmp.size()<10);
 					result = tmp.toArray(new String[tmp.size()]);
 				}
-				
-//				normalize n = new normalize();
-//				double cb,ar,checkins;
-//				HashMap<String,info> record = new HashMap<String,info>();
-//				List<Map<String, Object>> rs = analyticsjdbc.queryForList("SELECT related_id,cb,checkins FROM related_recommendation WHERE poiId = '"+json.getPoiId()+"' and type = '"+json.getReturnType()+"'");
-//				if (rs.size()>0)
-//				{
-//					boolean flag = true;
-//					for (Map<String, Object> r : rs) 
-//					{
-//						cb = Double.parseDouble(r.get("cb")+"");
-//						ar = Double.parseDouble(r.get("ar")+"");
-//						checkins = Double.parseDouble(r.get("checkins")+"");
-//						info i = new info(cb,ar,checkins);
-//						record.put(r.get("related_id").toString(), i);
-//						if (flag)
-//						{
-//							n.cbMax = cb;
-//							n.cbMin = cb;
-//							n.arMax = ar;
-//							n.arMin = ar;
-//							n.checkinsMax = checkins;
-//							n.checkinsMin = checkins;
-//							flag = false;
-//						}
-//						if (cb > n.cbMax)
-//							n.cbMax = cb;
-//						if (cb < n.cbMin)
-//							n.cbMin = cb;
-//						if (ar > n.arMax)
-//							n.arMax = ar;
-//						if (ar < n.arMin)
-//							n.arMin = ar;
-//						if (checkins > n.checkinsMax)
-//							n.checkinsMax = checkins;
-//						if (checkins < n.checkinsMin)
-//							n.checkinsMin = checkins;
-//					}
-//					n.cbValue = n.cbMax - n.cbMin;
-//					n.arValue = n.arMax - n.arMin;
-//					n.checkinsValue = n.checkinsMax - n.checkinsMin;
-//					result = integrated(record,n,resultPOI);
-//				}
-//				else //沒有在integrated表裡面
-//				{
-//					rs = commonJdbcTemplate.queryForList("SELECT countyId FROM Poi WHERE id = '"+json.getPoiId()+"'");
-//					String county = rs.get(0).get("countyId").toString();
-//					ArrayList<String> tmp = new ArrayList<String>();
-//					int value = 100000;
-//					do
-//					{
-//						rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE countyId = '"+county+"' and checkins > "+value+" and type = '"+json.getReturnType()+"' GROUP BY uniq ORDER by rand() limit 0,"+resultPOI+"");
-//						for (Map<String, Object> i : rs)
-//						{
-//							if (!tmp.contains(i.get("id").toString()))
-//								tmp.add(i.get("id").toString());
-//							if (tmp.size()==resultPOI)
-//								break;
-//						}
-//							
-//						value-=5000;
-//						if (value < 0)
-//						{
-//							break;
-//						}
-//					}
-//					while (tmp.size()<resultPOI);
-//					
-//					//沒有任何結果時, random
-//					if (tmp.size()<resultPOI)
-//					{
-//						rs = commonJdbcTemplate.queryForList("SELECT id FROM Poi WHERE countyId = '"+county+"' and type = '"+json.getReturnType()+"' ORDER by rand()");
-//						for (Map<String, Object> i : rs)
-//						{
-//							if (!tmp.contains(i.get("id").toString()))
-//								tmp.add(i.get("id").toString());
-//							if (tmp.size()==resultPOI)
-//								break;
-//						}
-//					}
-//					
-//					result = tmp.toArray(new String[tmp.size()]);
-//				}
-				
-				
-				
-				
-				
 				
 				
 			}
@@ -343,9 +266,9 @@ public class Recommendation {
 		return result;
       
 	}
-	private String[] integrated(HashMap<String,info> record,normalize n,int limit)
+	private String[] integrated(HashMap<String,info> record,normalize n)
 	{
-		double cb,ch;
+		double cb,ar,ch;
 		HashMap<String,Double> tmp = new HashMap<String,Double>();
 		for (String r : record.keySet())
 		{
@@ -354,25 +277,25 @@ public class Recommendation {
 				cb = 0;
 			else
 				cb = ((i.cb - n.cbMin) / n.cbValue);
-//			if ((i.ar - n.arMin)==0 || n.arValue==0)
-//				ar = 0;
-//			else
-//				ar = ((i.ar - n.arMin) / n.arValue);
+			if ((i.ar - n.arMin)==0 || n.arValue==0)
+				ar = 0;
+			else
+				ar = ((i.ar - n.arMin) / n.arValue);
 			if ((i.checkins - n.checkinsMin)==0 || n.checkinsValue==0)
 				ch = 0;
 			else
 				ch = ((i.checkins - n.checkinsMin) / n.checkinsValue);
 			
-			tmp.put(r, 0.4*cb + 0.6*ch);
+			tmp.put(r, 0.5*cb + 0.1*ar + 0.4*ch);
 		}
 		
 		List<Map.Entry<String, Integer>> rank = sortDouble(tmp);
-		String result[] = new String[limit];
+		String result[] = new String[10];
 		int j = 0;
 		for (Map.Entry<String, Integer> entry:rank) 
 	    {
 			result[j++] = entry.getKey();
-			if (j==limit)
+			if (j==10)
 				break;
 	    }
 		return result;
@@ -405,13 +328,13 @@ public class Recommendation {
 	}
 	private class info
 	{
-		private info(double c,double ch)
+		private info(double c,double a,double ch)
 		{
 			this.cb = c;
-//			this.ar = a;
+			this.ar = a;
 			this.checkins =ch;
 		}
-		double cb,checkins;
+		double cb,ar,checkins;
 	}
 	
 	private class defaultResult
@@ -535,14 +458,8 @@ public class Recommendation {
 		return results.toString();
 		
 	}
-	private String getQueryString(List<String> l)
-	{
-		String returnString="";
-		for (String ll : l)
-			returnString = "'" + ll + "',";
-		return returnString.substring(0,returnString.lastIndexOf(","));
-	}
-	private String[] FinStBestPOI(RecommendInput json,int limit) throws IOException, ParseException
+	
+	private String[] FinStBestPOI(RecommendInput json) throws IOException
 	{
 		
 		ArrayList<String> result = new ArrayList<String>();
@@ -553,13 +470,15 @@ public class Recommendation {
 			int value = 100000;
 			do
 			{
-				rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' ORDER by rand() limit 0,"+limit+"");
-//				rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,"+limit+"");
+				//themeId NOT LIKE 'FO%' and 
+				
+				//SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= 0 and type in (2) GROUP BY uniq ORDER by rand() limit 0,10
+				rs = analyticsjdbc.queryForList("SELECT IFNULL(fb_id,UUID()) AS uniq,id FROM recommendation WHERE  checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY uniq ORDER by rand() limit 0,10");
 				for (Map<String, Object> i : rs)
 				{
 					if (!result.contains(i.get("id").toString()))
 						result.add(i.get("id").toString());
-					if (result.size()==limit)
+					if (result.size()==10)
 						break; 
 				}
 					
@@ -569,7 +488,7 @@ public class Recommendation {
 					break;
 				}
 			}
-			while (result.size()<limit);
+			while (result.size()<10);
 		}
 		else //指定縣市的Top景點推薦
 		{
@@ -577,17 +496,12 @@ public class Recommendation {
 			do
 			{
 				//themeId NOT LIKE 'FO%' and 
-				rs = analyticsjdbc.queryForList("SELECT id FROM ST_V3_COMMON.Poi WHERE id in (SELECT poiId FROM Poi_mapping WHERE checkins >="+value+") and type = '"+json.getReturnType()+"' and countyId in ("+getQueryString(json.getCountyId())+") ORDER by rand() limit 0,"+limit+"");
+				rs = analyticsjdbc.queryForList("SELECT id FROM recommendation WHERE countyId = '"+json.getCountyId().get(0)+"' and checkins >= "+value+" and type in ("+json.getReturnType()+") GROUP BY fb_id ORDER by rand() limit 0,10");
 				for (Map<String, Object> i : rs)
 				{
-					if (i.get("type") != null && i.get("type").toString().equals("2")) //檢查活動時間是否過期
-					{
-						if (checkExpire(i.get("id").toString()))
-							continue;
-					}
 					if (!result.contains(i.get("id").toString()))
 						result.add(i.get("id").toString());
-					if (result.size()==limit)
+					if (result.size()==10)
 						break;
 				}
 					
@@ -597,32 +511,12 @@ public class Recommendation {
 					break;
 				}
 			}
-			while (result.size()<limit);
+			while (result.size()<10);
 			
 		}
 		return result.toArray(new String[result.size()]);
 	}
-	private boolean checkExpire(String poiId) throws IOException, ParseException
-	{
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-		Date now = new Date();
-		String html = request("http://api.vztaiwan.com/api/Pois/" + poiId, "UTF-8");
-		Pattern p = Pattern.compile("\"endTime\":\".+?\"}");
-		Matcher m = p.matcher(html);
-		
-		String str;
-		while (m.find())
-		{
-			str = m.group().replace("\"endTime\":\"", "").replace("\"}", "");
-			if (sdf.parse(str).before(now))
-				return true;
-		}
-		
-		
-		return false;
-		
-	}
-	private String[] FindBestPOI(timeInfo ti,double px,double py,int rlimit) throws SQLException, ClassNotFoundException, IOException
+	private String[] FindBestPOI(timeInfo ti,double px,double py) throws SQLException, ClassNotFoundException, IOException
 	{
 		
 		int hour = ti.hour;
@@ -631,7 +525,7 @@ public class Recommendation {
 		HashMap<String,Double> distance = new HashMap<String,Double>();
 		HashMap<String,Integer> finalResult = new HashMap<String,Integer>();
 		
-		String result[] = new String[rlimit];
+		String result[] = new String[5];
 		
 		List<PoiCheckins> sqlresult = null;
 		if (24-hour>2)
@@ -690,7 +584,7 @@ public class Recommendation {
 					+ "and A.checkins IS NOT NULL and A.Place_Id = B.place_id and A.checkins > 5000 and A.type <> '4' GROUP BY fb_id ORDER BY RAND()");
 			for (PoiCheckins p : sqlresult)
 			{
-				if (i==rlimit)
+				if (i==5)
 					break;
 				result[i++] = p.getPlaceID(); 
 			}
@@ -705,7 +599,7 @@ public class Recommendation {
 			}	
 		}
 		
-		if (finalResult.size()<rlimit) //擴大範圍->一小時內
+		if (finalResult.size()<5) //擴大範圍->一小時內
 		{
 			for (String d : distance.keySet())
 			{
@@ -715,7 +609,7 @@ public class Recommendation {
 				}	
 			}
 			
-			if (finalResult.size()<rlimit) //全部有打卡數的景點加入
+			if (finalResult.size()<5) //全部有打卡數的景點加入
 			{
 				for (String d : distance.keySet())
 				{
@@ -730,10 +624,11 @@ public class Recommendation {
 		for (Map.Entry<String, Integer> entry:rank) 
 	    {
 			result[i++] = entry.getKey();
-			if (i==rlimit)
+			if (i==5)
 				break;
 	    }
 		
+		System.out.println("SELECT * FROM scheduling WHERE place_id = '"+result[0]+"' or place_id = '"+result[1]+"' or place_id = '"+result[2]+"' or place_id = '"+result[3]+"' or place_id = '"+result[4]+"'");
 		return result;
 	}
 	
@@ -769,13 +664,13 @@ public class Recommendation {
         });
 		
 		int i=0;
-//		for (Map.Entry<String, Integer> entry:list_Data) 
-//	    {
-//			System.out.println(entry.getKey() + "->" + entry.getValue());
-//			i++;
-//	    }
-//		
-//		System.out.println(i);
+		for (Map.Entry<String, Integer> entry:list_Data) 
+	    {
+			System.out.println(entry.getKey() + "->" + entry.getValue());
+			i++;
+	    }
+		
+		System.out.println(i);
 		
 		return list_Data;
 	}
